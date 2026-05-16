@@ -1,0 +1,63 @@
+{
+  "name": "paubox-cli",
+  "version": "0.1.0",
+  "description": "Official CLI for the Paubox encrypted email API",
+  "license": "Apache-2.0",
+  "author": "Paubox, Inc.",
+  "homepage": "https://github.com/paubox/paubox-cli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paubox/paubox-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/paubox/paubox-cli/issues"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "bin": {
+    "paubox": "./bin/paubox.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "bin/",
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
+    "dev": "tsx src/index.ts",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@commander-js/extra-typings": "^12.1.0",
+    "@inquirer/prompts": "^7.0.0",
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "keytar": "^7.9.0"
+  },
+  "optionalDependencies": {
+    "keytar": "^7.9.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
