@@ -3,6 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as configStore from '../../src/lib/config-store';
 
+const itUnix = process.platform === 'win32' ? it.skip : it;
+
 let tmpDir: string;
 
 beforeEach(() => {
@@ -33,10 +35,13 @@ describe('config-store', () => {
       expect(configStore.getCredentials()).toBeNull();
     });
 
-    it('sets file permissions to 0o600', () => {
+    itUnix('sets file permissions to 0o600 (POSIX only)', () => {
       configStore.saveCredentials('myuser', 'mykey');
       const stat = fs.statSync(configStore.getConfigPath());
-      // On Linux, mode includes file type bits; mask to permission bits only
+      // On Linux, mode includes file type bits; mask to permission bits only.
+      // Windows ignores POSIX permission bits entirely (fs.statSync returns 0o666
+      // regardless of the mode passed to writeFileSync), so this assertion is
+      // meaningful only on Unix-like systems.
       expect(stat.mode & 0o777).toBe(0o600);
     });
   });
