@@ -218,12 +218,12 @@ Releases are fully automated through [Release Please](https://github.com/googlea
 
 Release-please and the publish job live in the same workflow file (`release-please.yml`) on purpose: a separate workflow listening for tag pushes would never fire, because tags created by `GITHUB_TOKEN` deliberately don't trigger downstream workflows. Chaining the jobs via `needs:` keeps the entire release in one run, no PAT required.
 
-The standalone `publish.yml` workflow exists as a manual fallback (`workflow_dispatch`) for backfilling a specific tag — e.g. after a transient registry failure.
+If the publish job ever fails for a transient reason (registry hiccup, OIDC rotation, etc.), recover by re-running just the failed job from the Actions UI — the `release-please` job already created the tag and Release, so re-running the `publish` job picks them up unchanged.
 
 ### Setup requirements (one-time)
 
 - Repository setting: **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** (so release-please can open the release PR).
-- npm package setting: a trusted publisher must be configured at `npmjs.com/package/paubox-cli/access`, pointing at this repo and `publish.yml`.
+- npm package setting: a trusted publisher must be configured at `npmjs.com/package/paubox-cli/access`, pointing at this repo and `release-please.yml`.
 
 ## License
 
