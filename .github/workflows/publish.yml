@@ -3,7 +3,12 @@ name: Publish
 on:
   push:
     tags:
-      - 'v*'
+      - 'paubox-cli-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to publish from (e.g. paubox-cli-v0.1.1)'
+        required: true
 
 jobs:
   publish-npm:
@@ -15,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
