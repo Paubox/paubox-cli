@@ -1,13 +1,15 @@
-name: Publish
+name: Publish (manual)
+
+# Manual publish workflow for backfilling specific tags. The normal
+# release flow is integrated into release-please.yml — this exists only
+# as a safety hatch when a tag needs to be (re)published outside the
+# automated flow (e.g. transient registry failure, missed trigger).
 
 on:
-  push:
-    tags:
-      - 'paubox-cli-v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to publish from (e.g. paubox-cli-v0.1.1)'
+        description: 'Git tag to publish from (e.g. paubox-cli-v0.1.2)'
         required: true
 
 jobs:
@@ -21,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event.inputs.tag }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
