@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { Command } from 'commander';
 import { registerAuthCommands } from './commands/auth';
 import { registerConfigCommands } from './commands/config';
@@ -6,13 +8,23 @@ import { registerStatusCommand } from './commands/status';
 import { PauboxError } from './lib/errors';
 import { printError } from './lib/output';
 
+// Read version from package.json at runtime. Both the compiled entry
+// (dist/index.js) and the source entry (src/index.ts) sit one level
+// below the package root, so the relative path resolves correctly in
+// dev (tsx) and in the published tarball.
+function readPackageVersion(): string {
+  const pkgPath = join(__dirname, '..', 'package.json');
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
+  return pkg.version;
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
   program
     .name('paubox')
     .description('Official CLI for the Paubox encrypted email API')
-    .version('0.1.0', '-v, --version')
+    .version(readPackageVersion(), '-v, --version')
     .option('--json', 'Output as JSON')
     .option('-q, --quiet', 'Suppress non-essential output')
     .configureOutput({
