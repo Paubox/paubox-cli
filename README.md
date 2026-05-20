@@ -195,11 +195,32 @@ npm run dev -- auth status  # Run without building
 src/
   commands/       auth, send, status, config command handlers
   lib/            api client, credential storage, config store, output helpers
-  index.ts        CLI entry point (exports createProgram())
+  index.ts        Library entry — exports createProgram() and run()
+  cli.ts          Runtime entry — invokes run() (used by bin/ and `npm run dev`)
 bin/
   paubox.js       Shebang wrapper (ships in npm package)
 test/             Jest unit tests mirroring src/ structure
 ```
+
+## Releasing
+
+Releases are fully automated through [Release Please](https://github.com/googleapis/release-please) and [npm Trusted Publishers](https://docs.npmjs.com/trusted-publishers). No local commands, no tokens, no manual tagging.
+
+### Flow
+
+1. Land changes on `master` using [Conventional Commits](https://www.conventionalcommits.org/):
+   - `fix: ...` → patch bump (e.g. 0.1.0 → 0.1.1)
+   - `feat: ...` → minor bump (e.g. 0.1.0 → 0.2.0)
+   - `feat!: ...` or `BREAKING CHANGE:` in the body → minor bump pre-1.0, major bump after 1.0
+   - `chore: ...`, `docs: ...`, `refactor: ...`, `test: ...` → no version bump
+2. The **release-please** workflow opens (or updates) a PR titled `chore(master): release <next-version>` with a generated `CHANGELOG.md` entry and the version bump in `package.json` and `.release-please-manifest.json`.
+3. When that PR is merged, release-please creates the `v<version>` git tag and a GitHub Release with the changelog.
+4. The tag push triggers the **publish** workflow, which validates the build and publishes to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements) via OIDC (no `NPM_TOKEN` required).
+
+### Setup requirements (one-time)
+
+- Repository setting: **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** (so release-please can open the release PR).
+- npm package setting: a trusted publisher must be configured at `npmjs.com/package/paubox-cli/access`, pointing at this repo and `publish.yml`.
 
 ## License
 
