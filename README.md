@@ -214,8 +214,11 @@ Releases are fully automated through [Release Please](https://github.com/googlea
    - `feat!: ...` or `BREAKING CHANGE:` in the body → minor bump pre-1.0, major bump after 1.0
    - `chore: ...`, `docs: ...`, `refactor: ...`, `test: ...` → no version bump
 2. The **release-please** workflow opens (or updates) a PR titled `chore(master): release <next-version>` with a generated `CHANGELOG.md` entry and the version bump in `package.json` and `.release-please-manifest.json`.
-3. When that PR is merged, release-please creates the `v<version>` git tag and a GitHub Release with the changelog.
-4. The tag push triggers the **publish** workflow, which validates the build and publishes to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements) via OIDC (no `NPM_TOKEN` required).
+3. When that PR is merged, the same workflow creates the `paubox-cli-v<version>` git tag + GitHub Release, then immediately runs a dependent `publish` job that validates the build and publishes to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements) via OIDC.
+
+Release-please and the publish job live in the same workflow file (`release-please.yml`) on purpose: a separate workflow listening for tag pushes would never fire, because tags created by `GITHUB_TOKEN` deliberately don't trigger downstream workflows. Chaining the jobs via `needs:` keeps the entire release in one run, no PAT required.
+
+The standalone `publish.yml` workflow exists as a manual fallback (`workflow_dispatch`) for backfilling a specific tag — e.g. after a transient registry failure.
 
 ### Setup requirements (one-time)
 
