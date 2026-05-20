@@ -155,7 +155,7 @@ homebrew-paubox/
 ```ruby
 class PauboxCli < Formula
   desc "Official CLI for the Paubox encrypted email API"
-  homepage "https://github.com/paubox/paubox-cli"
+  homepage "https://github.com/Paubox/paubox-cli"
   url "https://registry.npmjs.org/paubox-cli/-/paubox-cli-0.1.0.tgz"
   sha256 "<sha256 of the npm tarball>"
   license "Apache-2.0"
@@ -180,7 +180,7 @@ To get the SHA256: `curl -s https://registry.npmjs.org/paubox-cli/0.1.0 | jq -r 
 ## Development
 
 ```bash
-git clone https://github.com/paubox/paubox-cli.git
+git clone https://github.com/Paubox/paubox-cli.git
 cd paubox-cli
 npm install
 npm test          # Run tests
