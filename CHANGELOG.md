@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.3](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.1.2...paubox-cli-v0.1.3) (2026-05-20)
+
+
+### Bug Fixes
+
+* chain publish job after release-please in the same workflow ([16943c2](https://github.com/Paubox/paubox-cli/commit/16943c2f59f10b32663c345a726b4f9e85a7bc95))
+* chain publish job after release-please in the same workflow ([dd0293e](https://github.com/Paubox/paubox-cli/commit/dd0293e82dc51e0a4ad493081033e6712e93f76f))
+* read CLI version from package.json instead of hardcoding it ([eac4434](https://github.com/Paubox/paubox-cli/commit/eac4434a4aa1a0d89747ccec63d053f97aac61a7))
+* read CLI version from package.json instead of hardcoding it ([ee945b0](https://github.com/Paubox/paubox-cli/commit/ee945b0243e5e05b28348c12f23d9f0118281a9b))
+
 ## [0.1.2](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.1.1...paubox-cli-v0.1.2) (2026-05-20)
 
 
