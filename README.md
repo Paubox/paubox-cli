@@ -17,6 +17,20 @@ brew tap paubox/paubox
 brew install paubox-cli
 ```
 
+### Windows
+
+```powershell
+winget install Paubox.CLI
+```
+
+Or via npm:
+
+```powershell
+npm install -g paubox-cli
+```
+
+> **Keytar (optional):** The CLI uses the Windows Credential Vault for secure credential storage via the `keytar` native module. If `keytar` fails to build during install, credentials fall back to a config file automatically — no action required. To enable native keychain support, install [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) before running `npm install -g paubox-cli`.
+
 ### Requirements
 
 - Node.js ≥ 20.12.0
@@ -24,7 +38,7 @@ brew install paubox-cli
   ```bash
   sudo apt-get install libsecret-1-dev
   ```
-  Without it, credentials fall back to `~/.config/paubox/config.json` automatically.
+  Without it, credentials fall back to a local config file automatically (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows).
 
 ## Quick Start
 
@@ -51,7 +65,7 @@ paubox auth logout    # Remove stored credentials
 paubox auth status    # Show current authentication state
 ```
 
-Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to `~/.config/paubox/config.json` with `0600` permissions.
+Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to a local config file (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows).
 
 ---
 
@@ -107,7 +121,7 @@ to@example.com         delivered  2026-01-01T12:00:00Z      opened  2026-01-01T1
 
 ### `paubox config`
 
-Manage CLI configuration stored in `~/.config/paubox/config.json`.
+Manage CLI configuration stored in `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows).
 
 ```bash
 paubox config set defaultFrom sender@yourdomain.com
