@@ -3,6 +3,7 @@ import { join } from 'path';
 import { Command } from 'commander';
 import { registerAuthCommands } from './commands/auth';
 import { registerConfigCommands } from './commands/config';
+import { registerFormsCommands } from './commands/forms';
 import { registerSendCommand } from './commands/send';
 import { registerStatusCommand } from './commands/status';
 import { PauboxError } from './lib/errors';
@@ -39,6 +40,7 @@ export function createProgram(): Command {
   registerSendCommand(program);
   registerStatusCommand(program);
   registerConfigCommands(program);
+  registerFormsCommands(program);
 
   return program;
 }

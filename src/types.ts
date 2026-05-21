@@ -66,6 +66,28 @@ export interface ConfigData {
   [key: string]: string | undefined;
 }
 
+export interface FormGetResponse {
+  id: string | number;
+  title: string;
+  description: string;
+  active: boolean;
+  submission_count: number;
+  signable: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormSubmissionAttachment {
+  fileName: string;
+  contentType: string;
+  content: string;
+}
+
+export interface FormSubmissionPayload {
+  form_data: Record<string, string>;
+  attachments?: FormSubmissionAttachment[];
+}
+
 export type OutputFormat = 'human' | 'json';
 
 export interface OutputOptions {
