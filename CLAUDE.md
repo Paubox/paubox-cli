@@ -41,7 +41,7 @@ Each file exports a single `register*` function that receives the root `program`
 
 - **`api.ts`** — `PauboxApiClient` class. Uses `globalThis.fetch` by default; accepts an injected `fetch` function as a second constructor argument for testing. Two methods: `sendEmail` and `getMessageStatus`. Auth header format: `Token token=<apiKey>`.
 - **`credentials.ts`** — Tries `require('keytar')` inside a try/catch; falls back to `config-store.ts` when keytar is unavailable (no native build, missing libsecret, etc.). Stores both credentials as a single JSON string in one keychain entry.
-- **`config-store.ts`** — Reads/writes `~/.config/paubox/config.json`. Stores credentials under a `credentials` key and user preferences under a `config` key in the same file. Exports `setConfigDir(dir)` — used in tests to redirect I/O to a temp directory.
+- **`config-store.ts`** — Reads/writes `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows). Stores credentials under a `credentials` key and user preferences under a `config` key in the same file. Exports `setConfigDir(dir)` — used in tests to redirect I/O to a temp directory.
 - **`output.ts`** — All terminal output goes through here; commands never call `console.log` directly. `printError` writes to stderr; everything else to stdout.
 - **`errors.ts`** — `PauboxError`, `AuthError`, `ApiError`, `ConfigError`. All carry `exitCode` and optional `suggestion`. Top-level `run()` in `index.ts` catches these and prints the suggestion before exiting.
 
@@ -54,7 +54,7 @@ Each file exports a single `register*` function that receives the root `program`
 
 ### Credential storage
 
-Credentials are stored as `JSON.stringify({ apiUsername, apiKey })` in a single keychain entry (`service: 'paubox-cli'`, `account: 'default'`). The file fallback stores credentials in the `credentials` section of `~/.config/paubox/config.json` with `0600` permissions.
+Credentials are stored as `JSON.stringify({ apiUsername, apiKey })` in a single keychain entry (`service: 'paubox-cli'`, `account: 'default'`). The file fallback stores credentials in the `credentials` section of `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows) with `0600` permissions (mode is a no-op on Windows).
 
 ### Distribution
 

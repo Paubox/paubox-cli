@@ -18,7 +18,12 @@ export function setConfigDir(dir: string): void {
 }
 
 export function getConfigDir(): string {
-  return configDirOverride ?? path.join(os.homedir(), '.config', 'paubox');
+  if (configDirOverride) return configDirOverride;
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appData, 'paubox');
+  }
+  return path.join(os.homedir(), '.config', 'paubox');
 }
 
 export function getConfigPath(): string {
