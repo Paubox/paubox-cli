@@ -39,7 +39,8 @@ Each file exports a single `register*` function that receives the root `program`
 
 ### Library layer (`src/lib/`)
 
-- **`api.ts`** — `PauboxApiClient` class. Uses `globalThis.fetch` by default; accepts an injected `fetch` function as a second constructor argument for testing. Two methods: `sendEmail` and `getMessageStatus`. Auth header format: `Token token=<apiKey>`.
+- **`api.ts`** — `PauboxApiClient` class. Uses `globalThis.fetch` by default; accepts an injected `fetch` function as a second constructor argument for testing. Two methods: `sendEmail` and `getMessageStatus`. Auth header format: `Token token=<apiKey>`. Also exports `resolveAttachments(filePaths)` — reads files, detects MIME type, returns base64-encoded `AttachmentOption[]`; shared by both email and forms commands.
+- **`forms-api.ts`** — `FormsApiClient` class for the `https://next.paubox.com` endpoints. No authentication required. Constructor: `(fetchFn?)`. Two methods: `getForm(formId)` (GET `/public/form_data/{id}`) and `submitForm(formId, payload)` (POST `/api/forms/{id}/submissions`, expects 201 with empty body).
 - **`credentials.ts`** — Tries `require('keytar')` inside a try/catch; falls back to `config-store.ts` when keytar is unavailable (no native build, missing libsecret, etc.). Stores both credentials as a single JSON string in one keychain entry.
 - **`config-store.ts`** — Reads/writes `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows). Stores credentials under a `credentials` key and user preferences under a `config` key in the same file. Exports `setConfigDir(dir)` — used in tests to redirect I/O to a temp directory.
 - **`output.ts`** — All terminal output goes through here; commands never call `console.log` directly. `printError` writes to stderr; everything else to stdout.
@@ -50,7 +51,7 @@ Each file exports a single `register*` function that receives the root `program`
 - **HTTP mocking**: inject a `jest.fn()` as the second arg to `PauboxApiClient`. Do not use nock (undici compatibility issue with Node 22's built-in fetch).
 - **keytar mocking**: use `jest.isolateModulesAsync` so each test gets fresh module instances. The helper pattern in `credentials.test.ts` (`withCreds`) is the established pattern.
 - **Config store in tests**: call `configStore.setConfigDir(tmpDir)` in `beforeEach`, reset to `''` in `afterEach`.
-- **Command tests**: call `createProgram().parseAsync(['node', 'paubox', ...])` directly. Mock `../../src/lib/credentials` and `../../src/lib/api` at the module level.
+- **Command tests**: call `createProgram().parseAsync(['node', 'paubox', ...])` directly. Mock `../../src/lib/credentials` and `../../src/lib/api` at the module level. For `forms` commands, mock `../../src/lib/forms-api` entirely (no credentials needed) and mock `resolveAttachments` from `../../src/lib/api`.
 
 ### Credential storage
 

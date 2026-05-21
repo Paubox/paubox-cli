@@ -119,6 +119,60 @@ to@example.com         delivered  2026-01-01T12:00:00Z      opened  2026-01-01T1
 
 ---
 
+### `paubox forms`
+
+Retrieve form metadata and submit responses to Paubox forms. These commands do not require authentication.
+
+#### `forms get <formId>`
+
+```bash
+paubox forms get <formId>
+paubox --json forms get <formId>
+```
+
+Prints the form's title, description, active status, submission count, and timestamps. With `--json`, returns the raw API response object.
+
+#### `forms submit <formId>`
+
+```bash
+# Inline key=value pairs (repeatable)
+paubox forms submit <formId> \
+  --data "first_name=Jane" \
+  --data "last_name=Doe" \
+  --data "email=jane@example.com"
+
+# Read form fields from a JSON file
+paubox forms submit <formId> --data-file ./fields.json
+
+# Mix file and inline overrides (--data wins on matching keys)
+paubox forms submit <formId> \
+  --data-file ./base.json \
+  --data "field=override"
+
+# Attach a file with the submission
+paubox forms submit <formId> \
+  --data "name=Jane" \
+  --attach /path/to/signed-consent.pdf
+```
+
+| Flag | Description |
+|------|-------------|
+| `--data <key=value>` | Form field as a key=value pair. Repeatable. Values may contain `=`. |
+| `--data-file <path>` | Path to a JSON file whose top-level string values are used as form_data. Merged with `--data`; `--data` takes precedence on matching keys. |
+| `--attach <file>` | File to include as an attachment. Repeatable. Total request size must not exceed 250 MB. |
+
+On success:
+```
+✓ Form submitted successfully.
+```
+
+With `--json`:
+```json
+{ "status": "ok", "formId": "<formId>" }
+```
+
+---
+
 ### `paubox config`
 
 Manage CLI configuration stored in `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows).
@@ -207,8 +261,8 @@ npm run dev -- auth status  # Run without building
 
 ```
 src/
-  commands/       auth, send, status, config command handlers
-  lib/            api client, credential storage, config store, output helpers
+  commands/       auth, send, status, config, forms command handlers
+  lib/            api client, forms API client, credential storage, config store, output helpers
   index.ts        Library entry — exports createProgram() and run()
   cli.ts          Runtime entry — invokes run() (used by bin/ and `npm run dev`)
 bin/
