@@ -1,7 +1,7 @@
 import { ApiError } from './errors';
 import type { FormGetResponse, FormSubmissionPayload } from '../types';
 
-const FORMS_BASE_URL = 'https://next.paubox.com';
+const FORMS_BASE_URL = 'https://apx.paubox.com/forms';
 
 type FetchFn = typeof fetch;
 
