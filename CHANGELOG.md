@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.2.0...paubox-cli-v0.3.0) (2026-05-21)
+
+
+### Features
+
+* add paubox forms command group ([#15](https://github.com/Paubox/paubox-cli/issues/15)) ([4568eeb](https://github.com/Paubox/paubox-cli/commit/4568eeb0f5022ea9531f14c86ed0e9f95ad6d6eb))
+* Windows support and paubox forms command group ([#17](https://github.com/Paubox/paubox-cli/issues/17)) ([39b24f9](https://github.com/Paubox/paubox-cli/commit/39b24f9778a5e4b59a6a9c551d751f47fd817724))
+
+
+### Bug Fixes
+
+* point forms API at apx.paubox.com gateway ([#18](https://github.com/Paubox/paubox-cli/issues/18)) ([7a25a98](https://github.com/Paubox/paubox-cli/commit/7a25a98245d625c8204bcbf14bbe0c2952a6975b))
+
 ## [0.2.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.1.3...paubox-cli-v0.2.0) (2026-05-21)
 
 
