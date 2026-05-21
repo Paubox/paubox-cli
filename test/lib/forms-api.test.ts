@@ -35,7 +35,7 @@ describe('FormsApiClient.getForm', () => {
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm(FORM_ID);
     expect(mockFetch).toHaveBeenCalledWith(
-      `https://next.paubox.com/public/form_data/${FORM_ID}`,
+      `https://apx.paubox.com/forms/public/form_data/${FORM_ID}`,
     );
   });
 
@@ -44,7 +44,7 @@ describe('FormsApiClient.getForm', () => {
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm('form/with spaces');
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://next.paubox.com/public/form_data/form%2Fwith%20spaces',
+      'https://apx.paubox.com/forms/public/form_data/form%2Fwith%20spaces',
     );
   });
 
@@ -80,7 +80,7 @@ describe('FormsApiClient.submitForm', () => {
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.submitForm(FORM_ID, payload);
     expect(mockFetch).toHaveBeenCalledWith(
-      `https://next.paubox.com/api/forms/${FORM_ID}/submissions`,
+      `https://apx.paubox.com/forms/api/forms/${FORM_ID}/submissions`,
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
