@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.1.3...paubox-cli-v0.2.0) (2026-05-21)
+
+
+### Features
+
+* add Windows support ([3d647db](https://github.com/Paubox/paubox-cli/commit/3d647db2f8e542f166a7e4a10e84e818c0f143d2))
+* add Windows support ([40efc48](https://github.com/Paubox/paubox-cli/commit/40efc487fdc42949e6fc316d3c4cdabcf8a11788))
+
 ## [0.1.3](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.1.2...paubox-cli-v0.1.3) (2026-05-20)
 
 
