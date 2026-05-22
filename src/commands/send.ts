@@ -43,7 +43,7 @@ export function registerSendCommand(program: Command): void {
 
       const attachments = cmdOpts.attachment ? resolveAttachments(cmdOpts.attachment) : [];
 
-      const client = new PauboxApiClient(creds);
+      const client = new PauboxApiClient(creds, undefined, { verbose: opts.verbose });
       const result = await client.sendEmail({
         to: cmdOpts.to,
         from,

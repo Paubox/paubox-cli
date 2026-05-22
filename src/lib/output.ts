@@ -24,6 +24,15 @@ export function printError(message: string, suggestion?: string): void {
   }
 }
 
+export function printDebug(label: string, data: unknown): void {
+  process.stderr.write(chalk.cyan('[DEBUG] ') + chalk.dim(label + ': '));
+  if (typeof data === 'string') {
+    process.stderr.write(data + '\n');
+  } else {
+    process.stderr.write('\n' + JSON.stringify(data, null, 2) + '\n');
+  }
+}
+
 export function printTable(rows: Record<string, string>[]): void {
   if (rows.length === 0) return;
   const keys = Object.keys(rows[0]);

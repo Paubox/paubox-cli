@@ -1,3 +1,4 @@
+import { createVerboseFetch, type DebugOptions } from './debug';
 import { ApiError } from './errors';
 import type { FormGetResponse, FormSubmissionPayload } from '../types';
 
@@ -8,8 +9,9 @@ type FetchFn = typeof fetch;
 export class FormsApiClient {
   private readonly fetchFn: FetchFn;
 
-  constructor(fetchFn?: FetchFn) {
-    this.fetchFn = fetchFn ?? globalThis.fetch;
+  constructor(fetchFn?: FetchFn, debug?: DebugOptions) {
+    const baseFetch = fetchFn ?? globalThis.fetch;
+    this.fetchFn = debug ? createVerboseFetch(baseFetch, debug) : baseFetch;
   }
 
   async getForm(formId: string): Promise<FormGetResponse> {

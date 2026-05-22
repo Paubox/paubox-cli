@@ -198,6 +198,7 @@ These flags work with any command:
 |------|-------------|
 | `--json` | Output result as JSON (useful for scripting) |
 | `-q, --quiet` | Suppress non-essential output |
+| `--verbose` | Show detailed request/response information for debugging |
 | `-v, --version` | Print version |
 | `--help` | Show help |
 
@@ -292,6 +293,10 @@ If the publish job ever fails for a transient reason (registry hiccup, OIDC rota
 
 - Repository setting: **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** (so release-please can open the release PR).
 - npm package setting: a trusted publisher must be configured at `npmjs.com/package/paubox-cli/access`, pointing at this repo and `release-please.yml`.
+
+## Troubleshooting
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for help with common installation issues, network problems, and debugging tips.
 
 ## License
 

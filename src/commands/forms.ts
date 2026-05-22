@@ -75,7 +75,7 @@ export function registerFormsCommands(program: Command): void {
     .description('Retrieve form metadata')
     .action(async (formId: string) => {
       const opts = program.opts<OutputOptions>();
-      const client = new FormsApiClient();
+      const client = new FormsApiClient(undefined, { verbose: opts.verbose });
       const result = await client.getForm(formId);
       if (opts.json) {
         printJson(result);
@@ -118,7 +118,7 @@ export function registerFormsCommands(program: Command): void {
         ? resolveAttachments(cmdOpts.attach)
         : undefined;
 
-      const client = new FormsApiClient();
+      const client = new FormsApiClient(undefined, { verbose: opts.verbose });
       await client.submitForm(formId, {
         form_data: formData,
         ...(attachments ? { attachments } : {}),

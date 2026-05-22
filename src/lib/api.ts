@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { createVerboseFetch, type DebugOptions } from './debug';
 import { ApiError, AuthError } from './errors';
 import type {
   AttachmentOption,
@@ -71,9 +72,14 @@ export class PauboxApiClient {
   private readonly baseUrl: string;
   private readonly fetchFn: FetchFn;
 
-  constructor(private readonly credentials: PauboxCredentials, fetchFn?: FetchFn) {
+  constructor(
+    private readonly credentials: PauboxCredentials,
+    fetchFn?: FetchFn,
+    debug?: DebugOptions,
+  ) {
     this.baseUrl = `https://api.paubox.net/v1/${credentials.apiUsername}`;
-    this.fetchFn = fetchFn ?? globalThis.fetch;
+    const baseFetch = fetchFn ?? globalThis.fetch;
+    this.fetchFn = debug ? createVerboseFetch(baseFetch, debug) : baseFetch;
   }
 
   private authHeader(): string {

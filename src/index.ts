@@ -28,6 +28,7 @@ export function createProgram(): Command {
     .version(readPackageVersion(), '-v, --version')
     .option('--json', 'Output as JSON')
     .option('-q, --quiet', 'Suppress non-essential output')
+    .option('--verbose', 'Show detailed request/response information for debugging')
     .configureOutput({
       writeErr: (str) => process.stderr.write(str),
     });

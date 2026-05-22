@@ -25,7 +25,11 @@ export function registerAuthCommands(program: Command): void {
         }
 
         printInfo('Validating credentials…', opts);
-        const client = new PauboxApiClient({ apiUsername: apiUsername.trim(), apiKey: apiKey.trim() });
+        const client = new PauboxApiClient(
+          { apiUsername: apiUsername.trim(), apiKey: apiKey.trim() },
+          undefined,
+          { verbose: opts.verbose },
+        );
         const valid = await client.validateCredentials();
         if (!valid) {
           throw new AuthError(
