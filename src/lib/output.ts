@@ -1,6 +1,47 @@
 import chalk from 'chalk';
 import type { OutputOptions } from '../types';
 
+let verboseEnabled = false;
+
+export function setVerbose(enabled: boolean): void {
+  verboseEnabled = enabled;
+}
+
+export function isVerbose(): boolean {
+  return verboseEnabled;
+}
+
+export function printVerbose(label: string, data: string): void {
+  if (!verboseEnabled) return;
+  process.stderr.write(chalk.cyan(`[${label}] `) + data + '\n');
+}
+
+export function printVerboseRequest(method: string, url: string, headers: Record<string, string>, body?: string): void {
+  if (!verboseEnabled) return;
+  process.stderr.write(chalk.cyan('\n--- REQUEST ---\n'));
+  process.stderr.write(chalk.cyan('Method: ') + method + '\n');
+  process.stderr.write(chalk.cyan('URL: ') + url + '\n');
+  process.stderr.write(chalk.cyan('Headers:\n'));
+  for (const [key, value] of Object.entries(headers)) {
+    process.stderr.write(`  ${key}: ${value}\n`);
+  }
+  if (body) {
+    const truncated = body.length > 2000 ? body.slice(0, 2000) + '... (truncated)' : body;
+    process.stderr.write(chalk.cyan('Body:\n') + truncated + '\n');
+  }
+}
+
+export function printVerboseResponse(status: number, statusText: string, body?: string): void {
+  if (!verboseEnabled) return;
+  process.stderr.write(chalk.cyan('\n--- RESPONSE ---\n'));
+  process.stderr.write(chalk.cyan('Status: ') + `${status} ${statusText}\n`);
+  if (body) {
+    const truncated = body.length > 2000 ? body.slice(0, 2000) + '... (truncated)' : body;
+    process.stderr.write(chalk.cyan('Body:\n') + truncated + '\n');
+  }
+  process.stderr.write('\n');
+}
+
 export function printSuccess(message: string, opts?: OutputOptions): void {
   if (opts?.quiet) return;
   if (opts?.json) return;

@@ -93,4 +93,5 @@ export type OutputFormat = 'human' | 'json';
 export interface OutputOptions {
   json?: boolean;
   quiet?: boolean;
+  verbose?: boolean;
 }

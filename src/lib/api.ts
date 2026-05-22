@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ApiError, AuthError } from './errors';
+import { printVerboseRequest, printVerboseResponse } from './output';
 import type {
   AttachmentOption,
   MessageStatusResponse,
@@ -80,16 +81,31 @@ export class PauboxApiClient {
     return `Token token=${this.credentials.apiKey}`;
   }
 
+  private redactedAuthHeader(): string {
+    const key = this.credentials.apiKey;
+    const masked = key.length > 8 ? key.slice(0, 4) + '****' + key.slice(-4) : '****';
+    return `Token token=${masked}`;
+  }
+
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResponse> {
     const payload = buildPayload(options);
-    const response = await this.fetchFn(`${this.baseUrl}/messages`, {
+    const url = `${this.baseUrl}/messages`;
+    const headers = {
+      Authorization: this.authHeader(),
+      'Content-Type': 'application/json',
+    };
+    const body = JSON.stringify(payload);
+
+    printVerboseRequest('POST', url, { ...headers, Authorization: this.redactedAuthHeader() }, body);
+
+    const response = await this.fetchFn(url, {
       method: 'POST',
-      headers: {
-        Authorization: this.authHeader(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+      headers,
+      body,
     });
+
+    const responseBody = await response.text();
+    printVerboseResponse(response.status, response.statusText, responseBody);
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -98,37 +114,45 @@ export class PauboxApiClient {
           'Check your API credentials with `paubox auth status` or re-run `paubox auth login`.',
         );
       }
-      const body = await response.text();
-      throw new ApiError(`Send failed (${response.status}): ${body}`, response.status);
+      throw new ApiError(`Send failed (${response.status}): ${responseBody}`, response.status);
     }
 
-    return response.json() as Promise<SendEmailResponse>;
+    return JSON.parse(responseBody) as SendEmailResponse;
   }
 
   async getMessageStatus(sourceTrackingId: string): Promise<MessageStatusResponse> {
     const url = `${this.baseUrl}/message_receipt?sourceTrackingId=${encodeURIComponent(sourceTrackingId)}`;
-    const response = await this.fetchFn(url, {
-      headers: { Authorization: this.authHeader() },
-    });
+    const headers = { Authorization: this.authHeader() };
+
+    printVerboseRequest('GET', url, { Authorization: this.redactedAuthHeader() });
+
+    const response = await this.fetchFn(url, { headers });
+    const responseBody = await response.text();
+    printVerboseResponse(response.status, response.statusText, responseBody);
 
     if (!response.ok) {
       if (response.status === 401) {
         throw new AuthError('Authentication failed.');
       }
-      const body = await response.text();
-      throw new ApiError(`Status check failed (${response.status}): ${body}`, response.status);
+      throw new ApiError(`Status check failed (${response.status}): ${responseBody}`, response.status);
     }
 
-    return response.json() as Promise<MessageStatusResponse>;
+    return JSON.parse(responseBody) as MessageStatusResponse;
   }
 
   async validateCredentials(): Promise<boolean> {
+    const url = `${this.baseUrl}/messages`;
+    const headers = { Authorization: this.authHeader() };
+
+    printVerboseRequest('GET', url, { Authorization: this.redactedAuthHeader() });
+
     try {
-      const response = await this.fetchFn(`${this.baseUrl}/messages`, {
-        headers: { Authorization: this.authHeader() },
-      });
+      const response = await this.fetchFn(url, { headers });
+      const responseBody = await response.text();
+      printVerboseResponse(response.status, response.statusText, responseBody);
       return response.status !== 401;
-    } catch {
+    } catch (err) {
+      printVerboseResponse(0, 'Network error', err instanceof Error ? err.message : String(err));
       return false;
     }
   }

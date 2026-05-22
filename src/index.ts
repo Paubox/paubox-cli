@@ -7,7 +7,7 @@ import { registerFormsCommands } from './commands/forms';
 import { registerSendCommand } from './commands/send';
 import { registerStatusCommand } from './commands/status';
 import { PauboxError } from './lib/errors';
-import { printError } from './lib/output';
+import { printError, setVerbose, printVerbose } from './lib/output';
 
 // Read version from package.json at runtime. Both the compiled entry
 // (dist/index.js) and the source entry (src/index.ts) sit one level
@@ -28,9 +28,20 @@ export function createProgram(): Command {
     .version(readPackageVersion(), '-v, --version')
     .option('--json', 'Output as JSON')
     .option('-q, --quiet', 'Suppress non-essential output')
+    .option('--verbose', 'Show detailed request/response information for debugging')
     .configureOutput({
       writeErr: (str) => process.stderr.write(str),
     });
+
+  program.hook('preAction', () => {
+    const opts = program.opts<{ verbose?: boolean }>();
+    if (opts.verbose) {
+      setVerbose(true);
+      printVerbose('Version', readPackageVersion());
+      printVerbose('Node', process.version);
+      printVerbose('Platform', `${process.platform} ${process.arch}`);
+    }
+  });
 
   program.hook('postAction', () => {
     // no-op; errors are caught in parseAsync caller
