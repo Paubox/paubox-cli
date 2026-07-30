@@ -3,7 +3,7 @@ import type { Command } from 'commander';
 import { PauboxApiClient } from '../lib/api';
 import * as credentials from '../lib/credentials';
 import { AuthError } from '../lib/errors';
-import { printError, printInfo, printJson, printSuccess } from '../lib/output';
+import { printInfo, printJson, printSuccess } from '../lib/output';
 import type { OutputOptions } from '../types';
 
 export function registerAuthCommands(program: Command): void {
@@ -90,5 +90,3 @@ export function registerAuthCommands(program: Command): void {
       }
     });
 }
-
-export { printError };

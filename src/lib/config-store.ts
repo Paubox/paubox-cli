@@ -17,7 +17,7 @@ export function setConfigDir(dir: string): void {
   configDirOverride = dir;
 }
 
-export function getConfigDir(): string {
+function getConfigDir(): string {
   if (configDirOverride) return configDirOverride;
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
@@ -64,7 +64,7 @@ export function clearCredentials(): void {
   writeFile(data);
 }
 
-export function getConfig(): ConfigData {
+function getConfig(): ConfigData {
   return readFile().config ?? {};
 }
 
