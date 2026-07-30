@@ -88,7 +88,6 @@ export interface FormSubmissionPayload {
   attachments?: FormSubmissionAttachment[];
 }
 
-export type OutputFormat = 'human' | 'json';
 
 export interface OutputOptions {
   json?: boolean;
