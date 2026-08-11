@@ -60,12 +60,23 @@ paubox status <trackingId>
 Manage Paubox API credentials.
 
 ```bash
-paubox auth login     # Prompt for API username and key; validate and store
-paubox auth logout    # Remove stored credentials
-paubox auth status    # Show current authentication state
+paubox auth login          # Prompt for API username and key; validate and store
+paubox auth set-forms-key  # Prompt for a Forms API key (scoped key with the "forms" scope)
+paubox auth logout         # Remove stored credentials (including the Forms API key)
+paubox auth status         # Show current authentication state
 ```
 
 Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to a local config file (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows).
+
+#### Forms API key
+
+The authenticated `paubox forms` subcommands (`list`, `stats`, `submissions`, `export-csv`, `export-pdf`, `archive`, `unarchive`, `copy`, `create`, `update`) require a **scoped API key with the `forms` scope**. Store it with:
+
+```bash
+paubox auth set-forms-key
+```
+
+This works standalone — you do not need to run `paubox auth login` first. `paubox auth status` shows the (masked) Forms API key alongside your email API credentials. The key is not validated at save time; an invalid key or one missing the `forms` scope surfaces as a 401 error on first use.
 
 ---
 
@@ -121,7 +132,7 @@ to@example.com         delivered  2026-01-01T12:00:00Z      opened  2026-01-01T1
 
 ### `paubox forms`
 
-Retrieve form metadata and submit responses to Paubox forms. These commands do not require authentication.
+Work with Paubox forms. Two commands are public and require no authentication (`forms get`, `forms submit`). All other subcommands are authenticated and require a Forms API key — a scoped API key with the `forms` scope, stored via [`paubox auth set-forms-key`](#forms-api-key).
 
 #### `forms get <formId>`
 
@@ -170,6 +181,146 @@ With `--json`:
 ```json
 { "status": "ok", "formId": "<formId>" }
 ```
+
+#### Authenticated subcommands
+
+The following subcommands require a Forms API key (see [Forms API key](#forms-api-key)). All of them respect the global `--json` flag; with `--json`, list/stats/copy commands print the raw API response.
+
+##### `forms list`
+
+List forms for a customer.
+
+```bash
+paubox forms list --customer-id 42 --search intake --active true --order-by updated_at --order desc
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--customer-id <id>` | Yes | Customer ID to list forms for (integer) |
+| `--page <n>` | No | Page number (default 1) |
+| `--items <n>` | No | Items per page (default 50, max 100) |
+| `--search <text>` | No | Search text (matches title/description) |
+| `--form-id <id>` | No | Filter to a single form ID |
+| `--active <true\|false>` | No | Filter by active state |
+| `--archived <true\|false>` | No | Filter by archived state |
+| `--order-by <col>` | No | Sort column: `title`, `updated_at`, `submission_count`, `created_at` |
+| `--order <asc\|desc>` | No | Sort direction |
+
+Human output is one line per form (`<id>  <title>  active=<bool> archived=<bool> submissions=<n>`) followed by `Page X of Y (N forms total)`.
+
+##### `forms stats`
+
+Show form statistics: active form count, total submissions, and submissions in the last 7 days.
+
+```bash
+paubox forms stats                     # defaults to the API key's customer
+paubox forms stats --customer-id 42
+```
+
+##### `forms submissions <formId>`
+
+List submissions for a form.
+
+```bash
+paubox forms submissions <formId> --page 1 --items 25 --order-by created_at --order desc
+```
+
+| Flag | Description |
+|------|-------------|
+| `--page <n>` | Page number (default 1) |
+| `--items <n>` | Items per page (default 50, max 100) |
+| `--order-by <col>` | Sort column: `created_at`, `submitter_email` |
+| `--order <asc\|desc>` | Sort direction |
+| `--submission-id <id>` | Filter to a single submission ID |
+
+Human output is one line per submission (`<id>  <created_at>  <submitter_email>`) plus a totals line.
+
+##### `forms export-csv <formId> [submissionId]`
+
+Export a form's submissions (or a single submission) as CSV.
+
+```bash
+paubox forms export-csv <formId>                          # → form-<formId>-submissions.csv
+paubox forms export-csv <formId> <submissionId>           # → submission-<submissionId>.csv
+paubox forms export-csv <formId> --output ./export.csv    # custom path
+```
+
+##### `forms export-pdf <formId> <submissionId>`
+
+Export a single submission as PDF.
+
+```bash
+paubox forms export-pdf <formId> <submissionId> --output ./submission.pdf
+```
+
+Defaults to `submission-<submissionId>.pdf` when `--output` is omitted.
+
+##### `forms archive <formId>` / `forms unarchive <formId>`
+
+Archive or unarchive a form.
+
+```bash
+paubox forms archive <formId>
+paubox forms unarchive <formId>
+```
+
+##### `forms copy <formId>`
+
+Copy an existing form under a new title. Prints the new form's ID and title.
+
+```bash
+paubox forms copy <formId> --title "Copy of intake form"
+```
+
+`--title` is required.
+
+##### `forms create`
+
+Create a new form from a JSON definition file. Prints the created form's ID.
+
+```bash
+paubox forms create \
+  --title "Patient intake" \
+  --customer-id 42 \
+  --form-json-file ./form.json \
+  --description "New patient intake form" \
+  --recipient forms@yourdomain.com \
+  --active
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--title <t>` | Yes | Form title |
+| `--customer-id <id>` | Yes | Customer ID that owns the form (integer) |
+| `--form-json-file <path>` | Yes | Path to a JSON file with the form definition |
+| `--description <text>` | No | Form description |
+| `--recipient <email>` | No | Recipient email address |
+| `--active` | No | Mark the form active (default: inactive) |
+| `--signable` | No | Mark the form signable |
+| `--signature-confirmation-label <label>` | No | Signature confirmation label |
+| `--subscription-list-id <id>` | No | Subscription list ID |
+| `--type <type>` | No | Form type |
+| `--version <n>` | No | Form version (default 1) |
+| `--form-html-file <path>` | No | Path to a file with the form HTML |
+| `--form-css-file <path>` | No | Path to a file with the form CSS |
+
+##### `forms update <formId>`
+
+Update a form. Only the fields you pass are sent (PATCH-style); at least one option is required.
+
+```bash
+paubox forms update <formId> --title "Renamed form" --active false
+```
+
+| Flag | Description |
+|------|-------------|
+| `--title <t>` | New title |
+| `--description <text>` | New description |
+| `--recipient <email>` | New recipient email address |
+| `--active <true\|false>` | Set active state |
+| `--vanity-url <url>` | New vanity URL |
+| `--subscription-list-id <id>` | New subscription list ID |
+| `--form-json-file <path>` | Path to a JSON file with the new form definition |
 
 ---
 
@@ -261,7 +412,7 @@ npm run dev -- auth status  # Run without building
 
 ```
 src/
-  commands/       auth, send, status, config, forms command handlers
+  commands/       auth, send, status, config, forms, forms-admin command handlers
   lib/            api client, forms API client, credential storage, config store, output helpers
   index.ts        Library entry — exports createProgram() and run()
   cli.ts          Runtime entry — invokes run() (used by bin/ and `npm run dev`)

@@ -59,6 +59,44 @@ describe('credentials (keytar unavailable → file fallback)', () => {
       expect(creds.usingKeychain()).toBe(false);
     });
   });
+
+  it('round-trips formsApiKey via config file', async () => {
+    await withCreds(null, async (creds) => {
+      await creds.saveCredentials({
+        apiUsername: 'testuser',
+        apiKey: 'testkey123',
+        formsApiKey: 'formskey456',
+      });
+      expect(await creds.loadCredentials()).toEqual({
+        apiUsername: 'testuser',
+        apiKey: 'testkey123',
+        formsApiKey: 'formskey456',
+      });
+    });
+  });
+
+  it('round-trips forms-only credentials (empty email fields) via config file', async () => {
+    await withCreds(null, async (creds) => {
+      await creds.saveCredentials({ apiUsername: '', apiKey: '', formsApiKey: 'formskey456' });
+      expect(await creds.loadCredentials()).toEqual({
+        apiUsername: '',
+        apiKey: '',
+        formsApiKey: 'formskey456',
+      });
+    });
+  });
+
+  it('loads an old stored blob without formsApiKey (back-compat)', async () => {
+    await withCreds(null, async (creds) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'config.json'),
+        JSON.stringify({ credentials: { apiUsername: 'olduser', apiKey: 'oldkey' } }),
+      );
+      const loaded = await creds.loadCredentials();
+      expect(loaded).toEqual({ apiUsername: 'olduser', apiKey: 'oldkey' });
+      expect(loaded?.formsApiKey).toBeUndefined();
+    });
+  });
 });
 
 describe('credentials (keytar available)', () => {
@@ -120,6 +158,54 @@ describe('credentials (keytar available)', () => {
     };
     await withCreds(() => mockKeytar, async (creds) => {
       expect(creds.usingKeychain()).toBe(true);
+    });
+  });
+
+  it('serializes formsApiKey into the keychain blob', async () => {
+    const mockKeytar = {
+      setPassword: jest.fn().mockResolvedValue(undefined),
+      getPassword: jest.fn().mockResolvedValue(null),
+      deletePassword: jest.fn().mockResolvedValue(true),
+    };
+    await withCreds(() => mockKeytar, async (creds) => {
+      await creds.saveCredentials({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' });
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'paubox-cli',
+        'default',
+        JSON.stringify({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' }),
+      );
+    });
+  });
+
+  it('loads formsApiKey from the keychain blob', async () => {
+    const mockKeytar = {
+      setPassword: jest.fn(),
+      getPassword: jest
+        .fn()
+        .mockResolvedValue(JSON.stringify({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' })),
+      deletePassword: jest.fn(),
+    };
+    await withCreds(() => mockKeytar, async (creds) => {
+      expect(await creds.loadCredentials()).toEqual({
+        apiUsername: 'u',
+        apiKey: 'k',
+        formsApiKey: 'fk',
+      });
+    });
+  });
+
+  it('loads an old keychain blob without formsApiKey (back-compat)', async () => {
+    const mockKeytar = {
+      setPassword: jest.fn(),
+      getPassword: jest
+        .fn()
+        .mockResolvedValue(JSON.stringify({ apiUsername: 'u', apiKey: 'k' })),
+      deletePassword: jest.fn(),
+    };
+    await withCreds(() => mockKeytar, async (creds) => {
+      const loaded = await creds.loadCredentials();
+      expect(loaded).toEqual({ apiUsername: 'u', apiKey: 'k' });
+      expect(loaded?.formsApiKey).toBeUndefined();
     });
   });
 });

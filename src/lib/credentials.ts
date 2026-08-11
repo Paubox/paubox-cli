@@ -29,7 +29,7 @@ export async function saveCredentials(creds: PauboxCredentials): Promise<void> {
     );
     return;
   }
-  configStore.saveCredentials(creds.apiUsername, creds.apiKey);
+  configStore.saveCredentials(creds);
 }
 
 export async function loadCredentials(): Promise<PauboxCredentials | null> {

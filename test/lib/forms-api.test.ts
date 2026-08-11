@@ -1,5 +1,5 @@
 import { FormsApiClient } from '../../src/lib/forms-api';
-import { ApiError } from '../../src/lib/errors';
+import { ApiError, AuthError } from '../../src/lib/errors';
 
 function makeFetch(status: number, body: unknown): jest.Mock {
   return jest.fn().mockResolvedValue({
@@ -170,5 +170,484 @@ describe('FormsApiClient.submitForm', () => {
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string);
     expect(body).not.toHaveProperty('attachments');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authenticated endpoints
+// ---------------------------------------------------------------------------
+
+const API_KEY = 'pbx_scoped_key_123';
+const BASE = 'https://apx.paubox.com/forms';
+
+function makeAuthFetch(status: number, body: unknown, binary?: Buffer): jest.Mock {
+  return jest.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    text: jest.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
+    json: jest.fn().mockResolvedValue(body),
+    arrayBuffer: jest
+      .fn()
+      .mockResolvedValue(
+        binary
+          ? binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength)
+          : new ArrayBuffer(0),
+      ),
+  });
+}
+
+function makeClient(mockFetch: jest.Mock, apiKey: string | null = API_KEY): FormsApiClient {
+  return new FormsApiClient(mockFetch as unknown as typeof fetch, apiKey);
+}
+
+const FORM_RECORD = {
+  id: 'form-1',
+  title: 'Intake',
+  description: null,
+  form_html: null,
+  form_json: { fields: [] },
+  form_css: null,
+  vanity_url: null,
+  version: 1,
+  active: true,
+  customer_id: 42,
+  old_form_id: null,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-02T00:00:00Z',
+  recipient: null,
+  signable: false,
+  signature_confirmation_label: null,
+  submission_count: 3,
+  type: null,
+  subscription_list_id: null,
+  deleted: false,
+  archived: false,
+};
+
+const LIST_RESPONSE = {
+  results: [FORM_RECORD],
+  page_info: { count: 1, pages: 1, page: 1, items: 50 },
+};
+
+const STATS_RESPONSE = {
+  active_form_count: 4,
+  total_submission_count: 100,
+  submissions_last_7_days: 7,
+};
+
+const SUBMISSION_RECORD = {
+  id: 'sub-1',
+  form_id: 'form-1',
+  form_data: '{"name":"Jane"}',
+  storage_type: null,
+  storage_url: null,
+  submitter_email: 'jane@example.com',
+  recipients: null,
+  attachment_name: null,
+  attachment_url: null,
+  attachment_type: null,
+  created_at: '2026-02-01T00:00:00Z',
+};
+
+const SUBMISSION_LIST_RESPONSE = {
+  data: [SUBMISSION_RECORD],
+  total: 1,
+  page: 1,
+  items: 50,
+};
+
+describe('FormsApiClient.listForms', () => {
+  it('calls GET /api/forms with all query params', async () => {
+    const mockFetch = makeAuthFetch(200, LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.listForms({
+      customerId: 42,
+      formId: 'form-1',
+      search: 'intake form',
+      archived: false,
+      active: true,
+      orderBy: 'updated_at',
+      order: 'asc',
+      page: 2,
+      items: 25,
+    });
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(
+      `${BASE}/api/forms?customer_id=42&form_id=form-1&search=intake+form&archived=false&active=true&order_by=updated_at&order=asc&page=2&items=25`,
+    );
+  });
+
+  it('omits undefined params from the query string', async () => {
+    const mockFetch = makeAuthFetch(200, LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.listForms({ customerId: 42 });
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(`${BASE}/api/forms?customer_id=42`);
+  });
+
+  it('sends the Bearer Authorization header', async () => {
+    const mockFetch = makeAuthFetch(200, LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.listForms({ customerId: 42 });
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).toEqual({ Authorization: `Bearer ${API_KEY}` });
+  });
+
+  it('returns the parsed list response', async () => {
+    const mockFetch = makeAuthFetch(200, LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await expect(client.listForms({ customerId: 42 })).resolves.toEqual(LIST_RESPONSE);
+  });
+});
+
+describe('FormsApiClient.getFormStats', () => {
+  it('calls GET /api/forms/stats without query when customerId omitted', async () => {
+    const mockFetch = makeAuthFetch(200, STATS_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.getFormStats();
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/stats`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+  });
+
+  it('includes customer_id query param when provided', async () => {
+    const mockFetch = makeAuthFetch(200, STATS_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.getFormStats(42);
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(`${BASE}/api/forms/stats?customer_id=42`);
+  });
+
+  it('returns the parsed stats response', async () => {
+    const mockFetch = makeAuthFetch(200, STATS_RESPONSE);
+    const client = makeClient(mockFetch);
+    await expect(client.getFormStats()).resolves.toEqual(STATS_RESPONSE);
+  });
+});
+
+describe('FormsApiClient.getFormAdmin', () => {
+  it('calls GET /api/forms/:id with Bearer header and URL-encodes the id', async () => {
+    const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
+    const client = makeClient(mockFetch);
+    await client.getFormAdmin('form/with spaces');
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form%2Fwith%20spaces`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+  });
+
+  it('unwraps the {data} envelope', async () => {
+    const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
+    const client = makeClient(mockFetch);
+    await expect(client.getFormAdmin('form-1')).resolves.toEqual(FORM_RECORD);
+  });
+});
+
+describe('FormsApiClient.createForm', () => {
+  const createBody = {
+    title: 'New Form',
+    customer_id: 42,
+    form_json: { fields: [{ name: 'email' }] },
+    version: 1,
+    description: 'desc',
+    active: true,
+  };
+
+  it('POSTs to /api/forms with Bearer and Content-Type headers', async () => {
+    const mockFetch = makeAuthFetch(200, { id: 'new-id' });
+    const client = makeClient(mockFetch);
+    await client.createForm(createBody);
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/api/forms`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+    );
+  });
+
+  it('serializes the create body as JSON', async () => {
+    const mockFetch = makeAuthFetch(200, { id: 'new-id' });
+    const client = makeClient(mockFetch);
+    await client.createForm(createBody);
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual(createBody);
+  });
+
+  it('returns the {id} response', async () => {
+    const mockFetch = makeAuthFetch(200, { id: 'new-id' });
+    const client = makeClient(mockFetch);
+    await expect(client.createForm(createBody)).resolves.toEqual({ id: 'new-id' });
+  });
+});
+
+describe('FormsApiClient.updateForm', () => {
+  it('PUTs to /api/forms/:id with only provided fields', async () => {
+    const mockFetch = makeAuthFetch(200, { detail: 'Form updated successfully', form_id: 'form-1' });
+    const client = makeClient(mockFetch);
+    await client.updateForm('form-1', { title: 'Renamed', active: false });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/api/forms/form-1`,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+    );
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ title: 'Renamed', active: false });
+  });
+
+  it('resolves without a value on success', async () => {
+    const mockFetch = makeAuthFetch(200, { detail: 'Form updated successfully', form_id: 'form-1' });
+    const client = makeClient(mockFetch);
+    await expect(client.updateForm('form-1', { title: 'x' })).resolves.toBeUndefined();
+  });
+
+  it('maps 404 to ApiError with suggestion', async () => {
+    const mockFetch = makeAuthFetch(404, 'not found');
+    const client = makeClient(mockFetch);
+    await expect(client.updateForm('missing', { title: 'x' })).rejects.toMatchObject({
+      statusCode: 404,
+      message: 'Form or submission not found.',
+      suggestion: 'Check the ID and try again.',
+    });
+  });
+});
+
+describe('FormsApiClient.archiveForm / unarchiveForm', () => {
+  it('POSTs to /api/forms/:id/archive with Bearer header', async () => {
+    const mockFetch = makeAuthFetch(200, { detail: 'Form archived.' });
+    const client = makeClient(mockFetch);
+    await expect(client.archiveForm('form-1')).resolves.toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form-1/archive`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+  });
+
+  it('POSTs to /api/forms/:id/unarchive with Bearer header', async () => {
+    const mockFetch = makeAuthFetch(200, { detail: 'Form unarchived.' });
+    const client = makeClient(mockFetch);
+    await expect(client.unarchiveForm('form-1')).resolves.toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form-1/unarchive`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+  });
+});
+
+describe('FormsApiClient.copyForm', () => {
+  it('POSTs { form_id, title } to /api/forms/copy', async () => {
+    const mockFetch = makeAuthFetch(200, FORM_RECORD);
+    const client = makeClient(mockFetch);
+    await client.copyForm('form-1', 'Copied Title');
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/api/forms/copy`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }),
+    );
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ form_id: 'form-1', title: 'Copied Title' });
+  });
+
+  it('returns the new form record', async () => {
+    const mockFetch = makeAuthFetch(200, FORM_RECORD);
+    const client = makeClient(mockFetch);
+    await expect(client.copyForm('form-1', 'Copied Title')).resolves.toEqual(FORM_RECORD);
+  });
+});
+
+describe('FormsApiClient.listSubmissions', () => {
+  it('calls GET /api/forms/:formId/submissions with all query params', async () => {
+    const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.listSubmissions('form-1', {
+      page: 3,
+      items: 10,
+      orderBy: 'submitter_email',
+      order: 'desc',
+      submissionId: 'sub-1',
+    });
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(
+      `${BASE}/api/forms/form-1/submissions?page=3&items=10&order_by=submitter_email&order=desc&submission_id=sub-1`,
+    );
+  });
+
+  it('omits the query string entirely when no params given', async () => {
+    const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.listSubmissions('form-1', {});
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form-1/submissions`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+  });
+
+  it('URL-encodes the formId path segment', async () => {
+    const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await client.listSubmissions('form/1', {});
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(`${BASE}/api/forms/form%2F1/submissions`);
+  });
+
+  it('returns the parsed submission list response', async () => {
+    const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
+    const client = makeClient(mockFetch);
+    await expect(client.listSubmissions('form-1', {})).resolves.toEqual(
+      SUBMISSION_LIST_RESPONSE,
+    );
+  });
+});
+
+describe('FormsApiClient.exportSubmissionsCsv', () => {
+  it('calls the all-submissions CSV URL when submissionId is omitted', async () => {
+    const mockFetch = makeAuthFetch(200, '', Buffer.from('a,b\n1,2\n'));
+    const client = makeClient(mockFetch);
+    await client.exportSubmissionsCsv('form-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/api/forms/form-1/submissions/submission-csv`,
+      { headers: { Authorization: `Bearer ${API_KEY}` } },
+    );
+  });
+
+  it('appends the submissionId segment when given', async () => {
+    const mockFetch = makeAuthFetch(200, '', Buffer.from('a,b\n1,2\n'));
+    const client = makeClient(mockFetch);
+    await client.exportSubmissionsCsv('form-1', 'sub/1');
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(`${BASE}/api/forms/form-1/submissions/submission-csv/sub%2F1`);
+  });
+
+  it('returns a Buffer of the response bytes', async () => {
+    const csv = Buffer.from('a,b\n1,2\n');
+    const mockFetch = makeAuthFetch(200, '', csv);
+    const client = makeClient(mockFetch);
+    const result = await client.exportSubmissionsCsv('form-1');
+    expect(Buffer.isBuffer(result)).toBe(true);
+    expect(result.equals(csv)).toBe(true);
+  });
+
+  it('treats any non-200 status as an error', async () => {
+    const mockFetch = makeAuthFetch(204, '');
+    const client = makeClient(mockFetch);
+    await expect(client.exportSubmissionsCsv('form-1')).rejects.toThrow(ApiError);
+  });
+});
+
+describe('FormsApiClient.exportSubmissionPdf', () => {
+  it('calls the submission PDF URL with Bearer header and encoded segments', async () => {
+    const mockFetch = makeAuthFetch(200, '', Buffer.from('%PDF-1.7'));
+    const client = makeClient(mockFetch);
+    await client.exportSubmissionPdf('form/1', 'sub/1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/api/forms/form%2F1/submissions/sub%2F1/submission-pdf`,
+      { headers: { Authorization: `Bearer ${API_KEY}` } },
+    );
+  });
+
+  it('returns a Buffer of the PDF bytes', async () => {
+    const pdf = Buffer.from('%PDF-1.7 fake pdf bytes');
+    const mockFetch = makeAuthFetch(200, '', pdf);
+    const client = makeClient(mockFetch);
+    const result = await client.exportSubmissionPdf('form-1', 'sub-1');
+    expect(Buffer.isBuffer(result)).toBe(true);
+    expect(result.equals(pdf)).toBe(true);
+  });
+
+  it('throws on non-200 status', async () => {
+    const mockFetch = makeAuthFetch(500, 'boom');
+    const client = makeClient(mockFetch);
+    await expect(client.exportSubmissionPdf('form-1', 'sub-1')).rejects.toMatchObject({
+      statusCode: 500,
+    });
+  });
+});
+
+describe('FormsApiClient authenticated error mapping', () => {
+  it('maps 401 to AuthError with set-forms-key suggestion', async () => {
+    const mockFetch = makeAuthFetch(401, 'unauthorized');
+    const client = makeClient(mockFetch);
+    await expect(client.listForms({ customerId: 42 })).rejects.toThrow(AuthError);
+    await expect(client.listForms({ customerId: 42 })).rejects.toMatchObject({
+      message: 'Forms API key is invalid or lacks the "forms" scope.',
+      suggestion: expect.stringContaining('paubox auth set-forms-key'),
+    });
+  });
+
+  it('maps 403 to ApiError with customer-id suggestion and body text', async () => {
+    const mockFetch = makeAuthFetch(403, 'customer mismatch');
+    const client = makeClient(mockFetch);
+    await expect(client.listForms({})).rejects.toThrow(ApiError);
+    await expect(client.listForms({})).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'Forbidden (403): customer mismatch',
+      suggestion: expect.stringContaining('--customer-id'),
+    });
+  });
+
+  it('maps 404 to ApiError with not-found message', async () => {
+    const mockFetch = makeAuthFetch(404, 'not found');
+    const client = makeClient(mockFetch);
+    await expect(client.getFormAdmin('missing')).rejects.toMatchObject({
+      statusCode: 404,
+      message: 'Form or submission not found.',
+      suggestion: 'Check the ID and try again.',
+    });
+  });
+
+  it('maps other errors to a generic ApiError including status and body', async () => {
+    const mockFetch = makeAuthFetch(500, 'internal error');
+    const client = makeClient(mockFetch);
+    await expect(client.getFormStats()).rejects.toMatchObject({
+      statusCode: 500,
+      message: 'Request failed (500): internal error',
+    });
+  });
+});
+
+describe('FormsApiClient without a Forms API key', () => {
+  const cases: Array<[string, (client: FormsApiClient) => Promise<unknown>]> = [
+    ['listForms', (c) => c.listForms({ customerId: 42 })],
+    ['getFormStats', (c) => c.getFormStats()],
+    ['getFormAdmin', (c) => c.getFormAdmin('form-1')],
+    [
+      'createForm',
+      (c) => c.createForm({ title: 't', customer_id: 1, form_json: {}, version: 1 }),
+    ],
+    ['updateForm', (c) => c.updateForm('form-1', { title: 't' })],
+    ['archiveForm', (c) => c.archiveForm('form-1')],
+    ['unarchiveForm', (c) => c.unarchiveForm('form-1')],
+    ['copyForm', (c) => c.copyForm('form-1', 't')],
+    ['listSubmissions', (c) => c.listSubmissions('form-1', {})],
+    ['exportSubmissionsCsv', (c) => c.exportSubmissionsCsv('form-1')],
+    ['exportSubmissionPdf', (c) => c.exportSubmissionPdf('form-1', 'sub-1')],
+  ];
+
+  it.each(cases)('%s throws AuthError and never calls fetch', async (_name, call) => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch, null);
+    await expect(call(client)).rejects.toThrow(AuthError);
+    await expect(call(client)).rejects.toMatchObject({
+      message: 'No Forms API key configured.',
+      suggestion: expect.stringContaining('paubox auth set-forms-key'),
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('public getForm still works without a key', async () => {
+    const mockFetch = makeAuthFetch(200, FORM_RESPONSE);
+    const client = makeClient(mockFetch, null);
+    await expect(client.getForm(FORM_ID)).resolves.toEqual(FORM_RESPONSE);
   });
 });
