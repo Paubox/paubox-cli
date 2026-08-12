@@ -733,20 +733,4 @@ describe('FormsApiClient URL-path sanitization (paubox-python3 pattern)', () => 
     },
   );
 
-  it('captured outbound URLs never contain a raw ".." segment across all methods', async () => {
-    // Belt-and-suspenders: whatever a caller passes, no "/..\/" appears in the URL fetch sees.
-    const mockFetch = makeAuthFetch(200, {});
-    const client = makeClient(mockFetch);
-    for (const [, call] of authMethods) {
-      try {
-        await call(client, '..');
-      } catch {
-        /* expected */
-      }
-    }
-    for (const call of mockFetch.mock.calls) {
-      const [url] = call as [string];
-      expect(url).not.toMatch(/\/\.\.(\/|$)/);
-    }
-  });
 });

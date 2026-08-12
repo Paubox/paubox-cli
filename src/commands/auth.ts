@@ -35,10 +35,13 @@ export function registerAuthCommands(program: Command): void {
         }
 
         const existing = await credentials.loadCredentials();
-        const sameAccount = existing?.apiUsername === apiUsername.trim();
+        const sameAccount =
+          !!existing?.apiUsername &&
+          existing.apiUsername.trim().toLowerCase() === apiUsername.trim().toLowerCase();
         const preservedFormsKey =
           sameAccount && existing?.formsApiKey ? existing.formsApiKey : undefined;
-        const clearedFormsKey = !sameAccount && Boolean(existing?.formsApiKey);
+        const clearedFormsKey =
+          !sameAccount && Boolean(existing?.formsApiKey) && Boolean(existing?.apiUsername);
 
         await credentials.saveCredentials({
           apiUsername: apiUsername.trim(),

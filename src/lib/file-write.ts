@@ -19,6 +19,13 @@ export function writeExportFile(outputPath: string, data: Buffer, force: boolean
     );
   }
 
+  if (existingStat?.isDirectory()) {
+    throw new ConfigError(
+      `--output points to a directory: ${outputPath}`,
+      'Pass a file path instead.',
+    );
+  }
+
   if (existingStat && !force) {
     throw new ConfigError(
       `File already exists: ${outputPath}`,

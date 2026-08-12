@@ -87,6 +87,14 @@ describe('writeExportFile', () => {
     expect(fs.existsSync(path.join(tmpDir, 'does-not-exist'))).toBe(false);
   });
 
+  it('refuses when --output points to a directory', () => {
+    const dest = path.join(tmpDir, 'a-directory');
+    fs.mkdirSync(dest);
+
+    expect(() => writeExportFile(dest, Buffer.from('x'), false)).toThrow(/points to a directory/);
+    expect(() => writeExportFile(dest, Buffer.from('x'), true)).toThrow(/points to a directory/);
+  });
+
   itUnix('overwriting with --force applies mode 0o600 even if the prior file was 0o644', () => {
     const dest = path.join(tmpDir, 'export.csv');
     fs.writeFileSync(dest, 'pre-existing', { mode: 0o644 });
