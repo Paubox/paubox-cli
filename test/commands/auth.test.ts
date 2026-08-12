@@ -32,7 +32,7 @@ describe('paubox auth status', () => {
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
 
     const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
-    expect(parsed).toEqual({ authenticated: false, formsApiKey: null });
+    expect(parsed).toEqual({ authenticated: false, formsApiKey: null, marketingApiKey: null });
     writeSpy.mockRestore();
   });
 
@@ -43,7 +43,7 @@ describe('paubox auth status', () => {
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
 
     const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
-    expect(parsed).toEqual({ authenticated: false, formsApiKey: null });
+    expect(parsed).toEqual({ authenticated: false, formsApiKey: null, marketingApiKey: null });
     writeSpy.mockRestore();
   });
 
@@ -89,6 +89,7 @@ describe('paubox auth status', () => {
       apiUsername: 'myuser',
       apiKey: '****kret',
       formsApiKey: null,
+      marketingApiKey: null,
       storage: 'OS keychain',
     });
     writeSpy.mockRestore();
@@ -112,6 +113,7 @@ describe('paubox auth status', () => {
       apiUsername: 'myuser',
       apiKey: '****kret',
       formsApiKey: '****9876',
+      marketingApiKey: null,
       storage: 'config file',
     });
     writeSpy.mockRestore();
@@ -184,6 +186,104 @@ describe('paubox auth status', () => {
     expect(parsed).toEqual({
       authenticated: false,
       formsApiKey: '****9876',
+      marketingApiKey: null,
+      storage: 'OS keychain',
+    });
+    writeSpy.mockRestore();
+  });
+
+  it('JSON includes masked marketingApiKey when email-authenticated with a marketing key', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed).toEqual({
+      authenticated: true,
+      apiUsername: 'myuser',
+      apiKey: '****kret',
+      formsApiKey: null,
+      marketingApiKey: '****5432',
+      storage: 'config file',
+    });
+    writeSpy.mockRestore();
+  });
+
+  it('human output shows the marketing key line when set', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Authenticated as myuser');
+    expect(output).toContain('Marketing API key: ****5432');
+    writeSpy.mockRestore();
+  });
+
+  it('human output suggests set-marketing-key when authenticated without a marketing key', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Marketing API key: not set');
+    expect(output).toContain('paubox auth set-marketing-key');
+    writeSpy.mockRestore();
+  });
+
+  it('reports marketing-only credentials (empty email fields) as not email-authenticated', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: '',
+      apiKey: '',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Email API: not authenticated');
+    expect(output).toContain('paubox auth login');
+    expect(output).toContain('Marketing API key: ****5432');
+    writeSpy.mockRestore();
+  });
+
+  it('outputs marketing-only JSON shape with authenticated false', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: '',
+      apiKey: '',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(true);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed).toEqual({
+      authenticated: false,
+      formsApiKey: null,
+      marketingApiKey: '****5432',
       storage: 'OS keychain',
     });
     writeSpy.mockRestore();
@@ -232,6 +332,29 @@ describe('paubox auth set-forms-key', () => {
     });
   });
 
+  it('preserves an existing marketing key when saving the forms key', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('forms-key-9876');
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(true);
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      formsApiKey: 'forms-key-9876',
+      marketingApiKey: 'marketing-key-5432',
+    });
+  });
+
   it('trims whitespace from the entered key', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('  forms-key-9876  ');
@@ -275,6 +398,120 @@ describe('paubox auth set-forms-key', () => {
     expect(parsed).toEqual({
       status: 'ok',
       formsApiKey: '****9876',
+      storage: 'OS keychain',
+    });
+    writeSpy.mockRestore();
+  });
+});
+
+describe('paubox auth set-marketing-key', () => {
+  it('saves the marketing key standalone with empty email fields when no creds exist', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('marketing-key-5432');
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-marketing-key']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: '',
+      apiKey: '',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Marketing API key saved');
+    expect(output).toContain('****5432');
+    expect(output).toContain('config file');
+    writeSpy.mockRestore();
+  });
+
+  it('preserves existing email credentials when saving the marketing key', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('marketing-key-5432');
+    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(true);
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-marketing-key']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+  });
+
+  it('preserves an existing forms key when saving the marketing key', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('marketing-key-5432');
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      formsApiKey: 'forms-key-9876',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(true);
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-marketing-key']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'myuser',
+      apiKey: 'sekret',
+      formsApiKey: 'forms-key-9876',
+      marketingApiKey: 'marketing-key-5432',
+    });
+  });
+
+  it('trims whitespace from the entered key', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('  marketing-key-5432  ');
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-marketing-key']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: '',
+      apiKey: '',
+      marketingApiKey: 'marketing-key-5432',
+    });
+  });
+
+  it('rejects with AuthError when the key is empty', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('   ');
+
+    await expect(
+      createProgram().parseAsync(['node', 'paubox', 'auth', 'set-marketing-key']),
+    ).rejects.toThrow('Marketing API key is required.');
+    expect(mockCredentials.saveCredentials).not.toHaveBeenCalled();
+  });
+
+  it('outputs JSON shape with --json flag', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('marketing-key-5432');
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(true);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'set-marketing-key']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed).toEqual({
+      status: 'ok',
+      marketingApiKey: '****5432',
       storage: 'OS keychain',
     });
     writeSpy.mockRestore();
@@ -405,6 +642,121 @@ describe('paubox auth login', () => {
 
     const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
     expect(parsed.formsApiKeyCleared).toBe(true);
+    writeSpy.mockRestore();
+  });
+
+  it('preserves an existing marketingApiKey on same-account re-login', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('myuser');
+    (password as jest.Mock).mockResolvedValue('new-sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'myuser',
+      apiKey: 'old-sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'myuser',
+      apiKey: 'new-sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    writeSpy.mockRestore();
+  });
+
+  it('clears the previous marketingApiKey on account switch', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('newuser');
+    (password as jest.Mock).mockResolvedValue('new-sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'olduser',
+      apiKey: 'old-sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'newuser',
+      apiKey: 'new-sekret',
+    });
+    const saved = mockCredentials.saveCredentials.mock.calls[0][0];
+    expect(saved).not.toHaveProperty('marketingApiKey');
+    writeSpy.mockRestore();
+  });
+
+  it('treats different-case usernames as the same account (preserves marketingApiKey)', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('MyUser');
+    (password as jest.Mock).mockResolvedValue('new-sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'myuser',
+      apiKey: 'old-sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'MyUser',
+      apiKey: 'new-sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+  });
+
+  it('does not report a "previous account cleared" marketing key when there was no prior account', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('firstuser');
+    (password as jest.Mock).mockResolvedValue('sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    // marketing-only prior state: set-marketing-key ran first with no email creds
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: '',
+      apiKey: '',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed.marketingApiKeyCleared).toBe(false);
+    writeSpy.mockRestore();
+  });
+
+  it('announces the cleared marketing key in JSON output on account switch', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('newuser');
+    (password as jest.Mock).mockResolvedValue('new-sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'olduser',
+      apiKey: 'old-sekret',
+      marketingApiKey: 'marketing-key-5432',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed.marketingApiKeyCleared).toBe(true);
     writeSpy.mockRestore();
   });
 

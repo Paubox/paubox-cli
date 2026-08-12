@@ -42,11 +42,16 @@ export function registerAuthCommands(program: Command): void {
           sameAccount && existing?.formsApiKey ? existing.formsApiKey : undefined;
         const clearedFormsKey =
           !sameAccount && Boolean(existing?.formsApiKey) && Boolean(existing?.apiUsername);
+        const preservedMarketingKey =
+          sameAccount && existing?.marketingApiKey ? existing.marketingApiKey : undefined;
+        const clearedMarketingKey =
+          !sameAccount && Boolean(existing?.marketingApiKey) && Boolean(existing?.apiUsername);
 
         await credentials.saveCredentials({
           apiUsername: apiUsername.trim(),
           apiKey: apiKey.trim(),
           ...(preservedFormsKey ? { formsApiKey: preservedFormsKey } : {}),
+          ...(preservedMarketingKey ? { marketingApiKey: preservedMarketingKey } : {}),
         });
 
         const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
@@ -56,12 +61,19 @@ export function registerAuthCommands(program: Command): void {
             apiUsername: apiUsername.trim(),
             storage,
             formsApiKeyCleared: clearedFormsKey,
+            marketingApiKeyCleared: clearedMarketingKey,
           });
         } else {
           printSuccess(`Authenticated as ${apiUsername.trim()} (stored in ${storage})`, opts);
           if (clearedFormsKey) {
             printInfo(
               'Forms API key from the previous account was cleared. Run `paubox auth set-forms-key` to add one for this account.',
+              opts,
+            );
+          }
+          if (clearedMarketingKey) {
+            printInfo(
+              'Marketing API key from the previous account was cleared. Run `paubox auth set-marketing-key` to add one for this account.',
               opts,
             );
           }
@@ -107,6 +119,40 @@ export function registerAuthCommands(program: Command): void {
     });
 
   auth
+    .command('set-marketing-key')
+    .description('Save a Marketing API key (scoped key with the "marketing" scope)')
+    .action(async () => {
+      const opts = program.opts<OutputOptions>();
+      try {
+        const marketingApiKey = await password({
+          message: "Marketing API key (scoped key with the 'marketing' scope):",
+          mask: '*',
+        });
+
+        if (!marketingApiKey.trim()) {
+          throw new AuthError('Marketing API key is required.');
+        }
+
+        const existing = await credentials.loadCredentials();
+        await credentials.saveCredentials({
+          ...(existing ?? { apiUsername: '', apiKey: '' }),
+          marketingApiKey: marketingApiKey.trim(),
+        });
+
+        const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
+        const masked = credentials.maskApiKey(marketingApiKey.trim());
+        if (opts.json) {
+          printJson({ status: 'ok', marketingApiKey: masked, storage });
+        } else {
+          printSuccess(`Marketing API key saved (${masked}, stored in ${storage})`, opts);
+        }
+      } catch (err) {
+        if (err instanceof AuthError) throw err;
+        throw new AuthError(String(err));
+      }
+    });
+
+  auth
     .command('logout')
     .description('Remove stored credentials')
     .action(async () => {
@@ -129,10 +175,13 @@ export function registerAuthCommands(program: Command): void {
       const maskedFormsKey = creds?.formsApiKey
         ? credentials.maskApiKey(creds.formsApiKey)
         : null;
+      const maskedMarketingKey = creds?.marketingApiKey
+        ? credentials.maskApiKey(creds.marketingApiKey)
+        : null;
 
-      if (!creds || (!emailAuthenticated && !maskedFormsKey)) {
+      if (!creds || (!emailAuthenticated && !maskedFormsKey && !maskedMarketingKey)) {
         if (opts.json) {
-          printJson({ authenticated: false, formsApiKey: null });
+          printJson({ authenticated: false, formsApiKey: null, marketingApiKey: null });
         } else {
           printInfo('Not authenticated. Run `paubox auth login`.', opts);
         }
@@ -147,10 +196,16 @@ export function registerAuthCommands(program: Command): void {
             apiUsername: creds.apiUsername,
             apiKey: credentials.maskApiKey(creds.apiKey),
             formsApiKey: maskedFormsKey,
+            marketingApiKey: maskedMarketingKey,
             storage,
           });
         } else {
-          printJson({ authenticated: false, formsApiKey: maskedFormsKey, storage });
+          printJson({
+            authenticated: false,
+            formsApiKey: maskedFormsKey,
+            marketingApiKey: maskedMarketingKey,
+            storage,
+          });
         }
         return;
       }
@@ -166,9 +221,19 @@ export function registerAuthCommands(program: Command): void {
         } else {
           printInfo('Forms API key: not set. Run `paubox auth set-forms-key`.', opts);
         }
+        if (maskedMarketingKey) {
+          printSuccess(`Marketing API key: ${maskedMarketingKey} (stored in ${storage})`, opts);
+        } else {
+          printInfo('Marketing API key: not set. Run `paubox auth set-marketing-key`.', opts);
+        }
       } else {
         printInfo('Email API: not authenticated. Run `paubox auth login`.', opts);
-        printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
+        if (maskedFormsKey) {
+          printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
+        }
+        if (maskedMarketingKey) {
+          printSuccess(`Marketing API key: ${maskedMarketingKey} (stored in ${storage})`, opts);
+        }
       }
     });
 }

@@ -55,7 +55,7 @@ Each file exports a single `register*` function that receives the root `program`
 
 ### Credential storage
 
-Credentials are stored as `JSON.stringify({ apiUsername, apiKey, formsApiKey? })` in a single keychain entry (`service: 'paubox-cli'`, `account: 'default'`). `formsApiKey` is optional (set via `paubox auth set-forms-key`) — a stored blob without it must keep loading (back-compat). `auth set-forms-key` works standalone: with no prior `auth login`, `apiUsername`/`apiKey` are saved as empty strings, and `auth status` treats empty strings as not-authenticated for the email API while still reporting the forms key. The file fallback stores the same full credentials object in the `credentials` section of `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows) with `0600` permissions (mode is a no-op on Windows).
+Credentials are stored as `JSON.stringify({ apiUsername, apiKey, formsApiKey?, marketingApiKey? })` in a single keychain entry (`service: 'paubox-cli'`, `account: 'default'`). `formsApiKey` and `marketingApiKey` are optional (set via `paubox auth set-forms-key` / `paubox auth set-marketing-key`) — a stored blob without them must keep loading (back-compat). `auth set-forms-key` and `auth set-marketing-key` work standalone: with no prior `auth login`, `apiUsername`/`apiKey` are saved as empty strings, and `auth status` treats empty strings as not-authenticated for the email API while still reporting the forms/marketing keys. The file fallback stores the same full credentials object in the `credentials` section of `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows) with `0600` permissions (mode is a no-op on Windows).
 
 ### Distribution
 

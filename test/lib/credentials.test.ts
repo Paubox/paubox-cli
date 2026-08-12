@@ -97,6 +97,24 @@ describe('credentials (keytar unavailable → file fallback)', () => {
       expect(loaded?.formsApiKey).toBeUndefined();
     });
   });
+
+  it('loads an old stored blob without marketingApiKey (back-compat)', async () => {
+    await withCreds(null, async (creds) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'config.json'),
+        JSON.stringify({
+          credentials: { apiUsername: 'olduser', apiKey: 'oldkey', formsApiKey: 'formskey456' },
+        }),
+      );
+      const loaded = await creds.loadCredentials();
+      expect(loaded).toEqual({
+        apiUsername: 'olduser',
+        apiKey: 'oldkey',
+        formsApiKey: 'formskey456',
+      });
+      expect(loaded?.marketingApiKey).toBeUndefined();
+    });
+  });
 });
 
 describe('credentials (keytar available)', () => {

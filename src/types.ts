@@ -2,6 +2,7 @@ export interface PauboxCredentials {
   apiUsername: string;
   apiKey: string;
   formsApiKey?: string;
+  marketingApiKey?: string;
 }
 
 export interface SendEmailOptions {

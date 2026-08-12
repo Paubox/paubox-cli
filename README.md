@@ -60,10 +60,11 @@ paubox status <trackingId>
 Manage Paubox API credentials.
 
 ```bash
-paubox auth login          # Prompt for API username and key; validate and store
-paubox auth set-forms-key  # Prompt for a Forms API key (scoped key with the "forms" scope)
-paubox auth logout         # Remove stored credentials (including the Forms API key)
-paubox auth status         # Show current authentication state
+paubox auth login              # Prompt for API username and key; validate and store
+paubox auth set-forms-key      # Prompt for a Forms API key (scoped key with the "forms" scope)
+paubox auth set-marketing-key  # Prompt for a Marketing API key (scoped key with the "marketing" scope)
+paubox auth logout             # Remove stored credentials (including the Forms and Marketing API keys)
+paubox auth status             # Show current authentication state
 ```
 
 Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to a local config file (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows).
@@ -77,6 +78,16 @@ paubox auth set-forms-key
 ```
 
 This works standalone — you do not need to run `paubox auth login` first. `paubox auth status` shows the (masked) Forms API key alongside your email API credentials. The key is not validated at save time; an invalid key or one missing the `forms` scope surfaces as a 401 error on first use.
+
+#### Marketing API key
+
+The Paubox Marketing product uses a **scoped API key with the `marketing` scope**. Store it with:
+
+```bash
+paubox auth set-marketing-key
+```
+
+This works standalone — you do not need to run `paubox auth login` first. `paubox auth status` shows the (masked) Marketing API key alongside your email API credentials. The key is not validated at save time; an invalid key or one missing the `marketing` scope surfaces as a 401 error on first use.
 
 ---
 
