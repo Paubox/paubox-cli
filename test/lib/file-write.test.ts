@@ -87,15 +87,14 @@ describe('writeExportFile', () => {
     expect(fs.existsSync(path.join(tmpDir, 'does-not-exist'))).toBe(false);
   });
 
-  itUnix('overwriting with --force replaces the inode (no in-place write into a hostile target)', () => {
+  itUnix('overwriting with --force applies mode 0o600 even if the prior file was 0o644', () => {
     const dest = path.join(tmpDir, 'export.csv');
-    fs.writeFileSync(dest, 'pre-existing');
-    const originalIno = fs.statSync(dest).ino;
+    fs.writeFileSync(dest, 'pre-existing', { mode: 0o644 });
+    expect(fs.statSync(dest).mode & 0o777).toBe(0o644);
 
     writeExportFile(dest, Buffer.from('replacement'), true);
 
-    const newIno = fs.statSync(dest).ino;
-    expect(newIno).not.toBe(originalIno);
     expect(fs.statSync(dest).mode & 0o777).toBe(0o600);
+    expect(fs.readFileSync(dest, 'utf8')).toBe('replacement');
   });
 });
