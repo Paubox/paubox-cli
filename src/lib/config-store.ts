@@ -1,13 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { ConfigData } from '../types';
+import type { ConfigData, PauboxCredentials } from '../types';
 
 interface StorageFile {
-  credentials?: {
-    apiUsername: string;
-    apiKey: string;
-  };
+  credentials?: PauboxCredentials;
   config?: ConfigData;
 }
 
@@ -47,14 +44,23 @@ function writeFile(data: StorageFile): void {
   fs.writeFileSync(p, JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 
-export function getCredentials(): { apiUsername: string; apiKey: string } | null {
+export function getCredentials(): PauboxCredentials | null {
   const data = readFile();
   return data.credentials ?? null;
 }
 
-export function saveCredentials(apiUsername: string, apiKey: string): void {
+export function saveCredentials(creds: PauboxCredentials): void;
+export function saveCredentials(apiUsername: string, apiKey: string): void;
+export function saveCredentials(
+  credsOrUsername: PauboxCredentials | string,
+  apiKey?: string,
+): void {
+  const creds: PauboxCredentials =
+    typeof credsOrUsername === 'string'
+      ? { apiUsername: credsOrUsername, apiKey: apiKey ?? '' }
+      : { ...credsOrUsername };
   const data = readFile();
-  data.credentials = { apiUsername, apiKey };
+  data.credentials = creds;
   writeFile(data);
 }
 

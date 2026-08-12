@@ -44,6 +44,43 @@ describe('paubox send', () => {
     ).rejects.toThrow();
   });
 
+  it('throws AuthError when only forms API key is configured (empty email fields)', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: '',
+      apiKey: '',
+      formsApiKey: 'forms-key-9876',
+    });
+    MockPauboxApiClient.prototype.sendEmail = jest.fn();
+    await expect(
+      createProgram().parseAsync([
+        'node', 'paubox', 'send',
+        '--to', 'to@example.com',
+        '--from', 'from@example.com',
+        '--subject', 'Hi',
+        '--text', 'Hello',
+      ]),
+    ).rejects.toThrow('Not authenticated.');
+    expect(MockPauboxApiClient.prototype.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('throws AuthError when apiKey is missing but apiUsername is present', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'user',
+      apiKey: '',
+    });
+    MockPauboxApiClient.prototype.sendEmail = jest.fn();
+    await expect(
+      createProgram().parseAsync([
+        'node', 'paubox', 'send',
+        '--to', 'to@example.com',
+        '--from', 'from@example.com',
+        '--subject', 'Hi',
+        '--text', 'Hello',
+      ]),
+    ).rejects.toThrow('Not authenticated.');
+    expect(MockPauboxApiClient.prototype.sendEmail).not.toHaveBeenCalled();
+  });
+
   it('sends email and prints tracking ID', async () => {
     mockCredentials.loadCredentials.mockResolvedValue(baseCreds);
     MockPauboxApiClient.prototype.sendEmail = jest.fn().mockResolvedValue({

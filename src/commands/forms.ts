@@ -4,6 +4,7 @@ import { FormsApiClient } from '../lib/forms-api';
 import { resolveAttachments } from '../lib/api';
 import { ConfigError } from '../lib/errors';
 import { printJson, printSuccess, printInfo } from '../lib/output';
+import { registerFormsAdminCommands } from './forms-admin';
 import type { OutputOptions } from '../types';
 
 function parseDataPairs(pairs: string[]): Record<string, string> {
@@ -130,4 +131,6 @@ export function registerFormsCommands(program: Command): void {
         printSuccess('Form submitted successfully.', opts);
       }
     });
+
+  registerFormsAdminCommands(forms, program);
 }

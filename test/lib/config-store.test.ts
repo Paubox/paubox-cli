@@ -35,6 +35,56 @@ describe('config-store', () => {
       expect(configStore.getCredentials()).toBeNull();
     });
 
+    it('saves and loads a full credentials object with formsApiKey', () => {
+      configStore.saveCredentials({
+        apiUsername: 'myuser',
+        apiKey: 'mykey',
+        formsApiKey: 'myformskey',
+      });
+      expect(configStore.getCredentials()).toEqual({
+        apiUsername: 'myuser',
+        apiKey: 'mykey',
+        formsApiKey: 'myformskey',
+      });
+    });
+
+    it('saves a credentials object without formsApiKey', () => {
+      configStore.saveCredentials({ apiUsername: 'myuser', apiKey: 'mykey' });
+      const creds = configStore.getCredentials();
+      expect(creds).toEqual({ apiUsername: 'myuser', apiKey: 'mykey' });
+      expect(creds?.formsApiKey).toBeUndefined();
+    });
+
+    it('loads an old stored file without formsApiKey (back-compat)', () => {
+      fs.writeFileSync(
+        configStore.getConfigPath(),
+        JSON.stringify({ credentials: { apiUsername: 'olduser', apiKey: 'oldkey' } }),
+      );
+      const creds = configStore.getCredentials();
+      expect(creds).toEqual({ apiUsername: 'olduser', apiKey: 'oldkey' });
+      expect(creds?.formsApiKey).toBeUndefined();
+    });
+
+    it('overwriting with the legacy two-arg form drops a previously stored formsApiKey', () => {
+      configStore.saveCredentials({
+        apiUsername: 'myuser',
+        apiKey: 'mykey',
+        formsApiKey: 'myformskey',
+      });
+      configStore.saveCredentials('newuser', 'newkey');
+      expect(configStore.getCredentials()).toEqual({ apiUsername: 'newuser', apiKey: 'newkey' });
+    });
+
+    itUnix('sets file permissions to 0o600 with formsApiKey present (POSIX only)', () => {
+      configStore.saveCredentials({
+        apiUsername: 'myuser',
+        apiKey: 'mykey',
+        formsApiKey: 'myformskey',
+      });
+      const stat = fs.statSync(configStore.getConfigPath());
+      expect(stat.mode & 0o777).toBe(0o600);
+    });
+
     itUnix('sets file permissions to 0o600 (POSIX only)', () => {
       configStore.saveCredentials('myuser', 'mykey');
       const stat = fs.statSync(configStore.getConfigPath());

@@ -34,16 +34,71 @@ export function registerAuthCommands(program: Command): void {
           );
         }
 
+        const existing = await credentials.loadCredentials();
+        const sameAccount =
+          !!existing?.apiUsername &&
+          existing.apiUsername.trim().toLowerCase() === apiUsername.trim().toLowerCase();
+        const preservedFormsKey =
+          sameAccount && existing?.formsApiKey ? existing.formsApiKey : undefined;
+        const clearedFormsKey =
+          !sameAccount && Boolean(existing?.formsApiKey) && Boolean(existing?.apiUsername);
+
         await credentials.saveCredentials({
           apiUsername: apiUsername.trim(),
           apiKey: apiKey.trim(),
+          ...(preservedFormsKey ? { formsApiKey: preservedFormsKey } : {}),
         });
 
         const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
         if (opts.json) {
-          printJson({ status: 'ok', apiUsername: apiUsername.trim(), storage });
+          printJson({
+            status: 'ok',
+            apiUsername: apiUsername.trim(),
+            storage,
+            formsApiKeyCleared: clearedFormsKey,
+          });
         } else {
           printSuccess(`Authenticated as ${apiUsername.trim()} (stored in ${storage})`, opts);
+          if (clearedFormsKey) {
+            printInfo(
+              'Forms API key from the previous account was cleared. Run `paubox auth set-forms-key` to add one for this account.',
+              opts,
+            );
+          }
+        }
+      } catch (err) {
+        if (err instanceof AuthError) throw err;
+        throw new AuthError(String(err));
+      }
+    });
+
+  auth
+    .command('set-forms-key')
+    .description('Save a Forms API key (scoped key with the "forms" scope)')
+    .action(async () => {
+      const opts = program.opts<OutputOptions>();
+      try {
+        const formsApiKey = await password({
+          message: "Forms API key (scoped key with the 'forms' scope):",
+          mask: '*',
+        });
+
+        if (!formsApiKey.trim()) {
+          throw new AuthError('Forms API key is required.');
+        }
+
+        const existing = await credentials.loadCredentials();
+        await credentials.saveCredentials({
+          ...(existing ?? { apiUsername: '', apiKey: '' }),
+          formsApiKey: formsApiKey.trim(),
+        });
+
+        const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
+        const masked = credentials.maskApiKey(formsApiKey.trim());
+        if (opts.json) {
+          printJson({ status: 'ok', formsApiKey: masked, storage });
+        } else {
+          printSuccess(`Forms API key saved (${masked}, stored in ${storage})`, opts);
         }
       } catch (err) {
         if (err instanceof AuthError) throw err;
@@ -70,23 +125,50 @@ export function registerAuthCommands(program: Command): void {
     .action(async () => {
       const opts = program.opts<OutputOptions>();
       const creds = await credentials.loadCredentials();
-      if (!creds) {
+      const emailAuthenticated = Boolean(creds && creds.apiUsername && creds.apiKey);
+      const maskedFormsKey = creds?.formsApiKey
+        ? credentials.maskApiKey(creds.formsApiKey)
+        : null;
+
+      if (!creds || (!emailAuthenticated && !maskedFormsKey)) {
         if (opts.json) {
-          printJson({ authenticated: false });
+          printJson({ authenticated: false, formsApiKey: null });
         } else {
           printInfo('Not authenticated. Run `paubox auth login`.', opts);
         }
         return;
       }
+
       const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
-      const masked = credentials.maskApiKey(creds.apiKey);
       if (opts.json) {
-        printJson({ authenticated: true, apiUsername: creds.apiUsername, apiKey: masked, storage });
-      } else {
+        if (emailAuthenticated) {
+          printJson({
+            authenticated: true,
+            apiUsername: creds.apiUsername,
+            apiKey: credentials.maskApiKey(creds.apiKey),
+            formsApiKey: maskedFormsKey,
+            storage,
+          });
+        } else {
+          printJson({ authenticated: false, formsApiKey: maskedFormsKey, storage });
+        }
+        return;
+      }
+
+      if (emailAuthenticated) {
+        const masked = credentials.maskApiKey(creds.apiKey);
         printSuccess(
           `Authenticated as ${creds.apiUsername} (API key: ${masked}, stored in ${storage})`,
           opts,
         );
+        if (maskedFormsKey) {
+          printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
+        } else {
+          printInfo('Forms API key: not set. Run `paubox auth set-forms-key`.', opts);
+        }
+      } else {
+        printInfo('Email API: not authenticated. Run `paubox auth login`.', opts);
+        printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
       }
     });
 }

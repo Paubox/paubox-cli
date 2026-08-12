@@ -13,7 +13,7 @@ export function registerStatusCommand(program: Command): void {
       const opts = program.opts<OutputOptions>();
 
       const creds = await credentials.loadCredentials();
-      if (!creds) throw new AuthError('Not authenticated.');
+      if (!creds?.apiKey || !creds?.apiUsername) throw new AuthError('Not authenticated.');
 
       const client = new PauboxApiClient(creds);
       const result = await client.getMessageStatus(trackingId);
