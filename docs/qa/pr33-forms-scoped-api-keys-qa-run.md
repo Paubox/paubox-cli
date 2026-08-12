@@ -11,7 +11,7 @@
 
 pb_rforms now accepts a **scoped API key** on its protected endpoints: `Authorization: Bearer <key>` where the key (no `.` in it, unlike a JWT) is validated against IAM's `/v1/api_key_entitlements` and must carry the **`forms` scope**. That makes the authenticated Forms API usable from a CLI for the first time. This PR adds the key to the CLI's credential store (single JSON blob: OS keychain via keytar, or `~/.config/paubox/config.json` fallback at mode 0600), a `paubox auth set-forms-key` command to save it, and ten new authenticated subcommands under `paubox forms`: `list`, `stats`, `submissions`, `export-csv`, `export-pdf`, `archive`, `unarchive`, `copy`, `create`, `update`. The two public commands (`forms get`, `forms submit`) are intentionally unchanged. All errors exit with code **1** and print a `suggestion` line on stderr.
 
-> **Base-URL caveat:** the CLI hardcodes `FORMS_BASE_URL = https://apx.paubox.com/forms` (production). There is no env override yet. To run this sheet against **staging** (`https://api.staging.paubox.net/forms`), temporarily patch the constant in `src/lib/forms-api.ts` and rebuild, or run against production with a dedicated **test customer**. (Candidate follow-up: `PAUBOX_FORMS_URL` env override.)
+> **Base URL:** defaults to `https://apx.paubox.com/forms` (production). To run this sheet against **staging**, set `PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms` — no patching or rebuilding required, so the artifact under test is the one that ships. Running against production with a dedicated **test customer** remains supported and is the prod-primary default.
 
 ---
 
