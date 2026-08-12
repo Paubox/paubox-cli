@@ -179,6 +179,8 @@ describe('FormsApiClient.submitForm', () => {
 
 const API_KEY = 'pbx_scoped_key_123';
 const BASE = 'https://apx.paubox.com/forms';
+const FORM_UUID = '11111111-1111-4111-8111-111111111111';
+const SUB_UUID = '22222222-2222-4222-8222-222222222222';
 
 function makeAuthFetch(status: number, body: unknown, binary?: Buffer): jest.Mock {
   return jest.fn().mockResolvedValue({
@@ -326,11 +328,11 @@ describe('FormsApiClient.getFormStats', () => {
 });
 
 describe('FormsApiClient.getFormAdmin', () => {
-  it('calls GET /api/forms/:id with Bearer header and URL-encodes the id', async () => {
+  it('calls GET /api/forms/:id with Bearer header and a UUID id', async () => {
     const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
     const client = makeClient(mockFetch);
-    await client.getFormAdmin('form/with spaces');
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form%2Fwith%20spaces`, {
+    await client.getFormAdmin(FORM_UUID);
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}`, {
       headers: { Authorization: `Bearer ${API_KEY}` },
     });
   });
@@ -338,7 +340,7 @@ describe('FormsApiClient.getFormAdmin', () => {
   it('unwraps the {data} envelope', async () => {
     const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
     const client = makeClient(mockFetch);
-    await expect(client.getFormAdmin('form-1')).resolves.toEqual(FORM_RECORD);
+    await expect(client.getFormAdmin(FORM_UUID)).resolves.toEqual(FORM_RECORD);
   });
 });
 
@@ -385,11 +387,11 @@ describe('FormsApiClient.createForm', () => {
 
 describe('FormsApiClient.updateForm', () => {
   it('PUTs to /api/forms/:id with only provided fields', async () => {
-    const mockFetch = makeAuthFetch(200, { detail: 'Form updated successfully', form_id: 'form-1' });
+    const mockFetch = makeAuthFetch(200, { detail: 'Form updated successfully', form_id: FORM_UUID });
     const client = makeClient(mockFetch);
-    await client.updateForm('form-1', { title: 'Renamed', active: false });
+    await client.updateForm(FORM_UUID, { title: 'Renamed', active: false });
     expect(mockFetch).toHaveBeenCalledWith(
-      `${BASE}/api/forms/form-1`,
+      `${BASE}/api/forms/${FORM_UUID}`,
       expect.objectContaining({
         method: 'PUT',
         headers: {
@@ -403,15 +405,15 @@ describe('FormsApiClient.updateForm', () => {
   });
 
   it('resolves without a value on success', async () => {
-    const mockFetch = makeAuthFetch(200, { detail: 'Form updated successfully', form_id: 'form-1' });
+    const mockFetch = makeAuthFetch(200, { detail: 'Form updated successfully', form_id: FORM_UUID });
     const client = makeClient(mockFetch);
-    await expect(client.updateForm('form-1', { title: 'x' })).resolves.toBeUndefined();
+    await expect(client.updateForm(FORM_UUID, { title: 'x' })).resolves.toBeUndefined();
   });
 
   it('maps 404 to ApiError with suggestion', async () => {
     const mockFetch = makeAuthFetch(404, 'not found');
     const client = makeClient(mockFetch);
-    await expect(client.updateForm('missing', { title: 'x' })).rejects.toMatchObject({
+    await expect(client.updateForm(FORM_UUID, { title: 'x' })).rejects.toMatchObject({
       statusCode: 404,
       message: 'Form or submission not found.',
       suggestion: 'Check the ID and try again.',
@@ -423,8 +425,8 @@ describe('FormsApiClient.archiveForm / unarchiveForm', () => {
   it('POSTs to /api/forms/:id/archive with Bearer header', async () => {
     const mockFetch = makeAuthFetch(200, { detail: 'Form archived.' });
     const client = makeClient(mockFetch);
-    await expect(client.archiveForm('form-1')).resolves.toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form-1/archive`, {
+    await expect(client.archiveForm(FORM_UUID)).resolves.toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/archive`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${API_KEY}` },
     });
@@ -433,8 +435,8 @@ describe('FormsApiClient.archiveForm / unarchiveForm', () => {
   it('POSTs to /api/forms/:id/unarchive with Bearer header', async () => {
     const mockFetch = makeAuthFetch(200, { detail: 'Form unarchived.' });
     const client = makeClient(mockFetch);
-    await expect(client.unarchiveForm('form-1')).resolves.toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form-1/unarchive`, {
+    await expect(client.unarchiveForm(FORM_UUID)).resolves.toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/unarchive`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${API_KEY}` },
     });
@@ -471,40 +473,32 @@ describe('FormsApiClient.listSubmissions', () => {
   it('calls GET /api/forms/:formId/submissions with all query params', async () => {
     const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
     const client = makeClient(mockFetch);
-    await client.listSubmissions('form-1', {
+    await client.listSubmissions(FORM_UUID, {
       page: 3,
       items: 10,
       orderBy: 'submitter_email',
       order: 'desc',
-      submissionId: 'sub-1',
+      submissionId: SUB_UUID,
     });
     const [url] = mockFetch.mock.calls[0] as [string];
     expect(url).toBe(
-      `${BASE}/api/forms/form-1/submissions?page=3&items=10&order_by=submitter_email&order=desc&submission_id=sub-1`,
+      `${BASE}/api/forms/${FORM_UUID}/submissions?page=3&items=10&order_by=submitter_email&order=desc&submission_id=${SUB_UUID}`,
     );
   });
 
   it('omits the query string entirely when no params given', async () => {
     const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
     const client = makeClient(mockFetch);
-    await client.listSubmissions('form-1', {});
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/form-1/submissions`, {
+    await client.listSubmissions(FORM_UUID, {});
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/submissions`, {
       headers: { Authorization: `Bearer ${API_KEY}` },
     });
-  });
-
-  it('URL-encodes the formId path segment', async () => {
-    const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
-    const client = makeClient(mockFetch);
-    await client.listSubmissions('form/1', {});
-    const [url] = mockFetch.mock.calls[0] as [string];
-    expect(url).toBe(`${BASE}/api/forms/form%2F1/submissions`);
   });
 
   it('returns the parsed submission list response', async () => {
     const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
     const client = makeClient(mockFetch);
-    await expect(client.listSubmissions('form-1', {})).resolves.toEqual(
+    await expect(client.listSubmissions(FORM_UUID, {})).resolves.toEqual(
       SUBMISSION_LIST_RESPONSE,
     );
   });
@@ -514,9 +508,9 @@ describe('FormsApiClient.exportSubmissionsCsv', () => {
   it('calls the all-submissions CSV URL when submissionId is omitted', async () => {
     const mockFetch = makeAuthFetch(200, '', Buffer.from('a,b\n1,2\n'));
     const client = makeClient(mockFetch);
-    await client.exportSubmissionsCsv('form-1');
+    await client.exportSubmissionsCsv(FORM_UUID);
     expect(mockFetch).toHaveBeenCalledWith(
-      `${BASE}/api/forms/form-1/submissions/submission-csv`,
+      `${BASE}/api/forms/${FORM_UUID}/submissions/submission-csv`,
       { headers: { Authorization: `Bearer ${API_KEY}` } },
     );
   });
@@ -524,16 +518,16 @@ describe('FormsApiClient.exportSubmissionsCsv', () => {
   it('appends the submissionId segment when given', async () => {
     const mockFetch = makeAuthFetch(200, '', Buffer.from('a,b\n1,2\n'));
     const client = makeClient(mockFetch);
-    await client.exportSubmissionsCsv('form-1', 'sub/1');
+    await client.exportSubmissionsCsv(FORM_UUID, SUB_UUID);
     const [url] = mockFetch.mock.calls[0] as [string];
-    expect(url).toBe(`${BASE}/api/forms/form-1/submissions/submission-csv/sub%2F1`);
+    expect(url).toBe(`${BASE}/api/forms/${FORM_UUID}/submissions/submission-csv/${SUB_UUID}`);
   });
 
   it('returns a Buffer of the response bytes', async () => {
     const csv = Buffer.from('a,b\n1,2\n');
     const mockFetch = makeAuthFetch(200, '', csv);
     const client = makeClient(mockFetch);
-    const result = await client.exportSubmissionsCsv('form-1');
+    const result = await client.exportSubmissionsCsv(FORM_UUID);
     expect(Buffer.isBuffer(result)).toBe(true);
     expect(result.equals(csv)).toBe(true);
   });
@@ -541,17 +535,17 @@ describe('FormsApiClient.exportSubmissionsCsv', () => {
   it('treats any non-200 status as an error', async () => {
     const mockFetch = makeAuthFetch(204, '');
     const client = makeClient(mockFetch);
-    await expect(client.exportSubmissionsCsv('form-1')).rejects.toThrow(ApiError);
+    await expect(client.exportSubmissionsCsv(FORM_UUID)).rejects.toThrow(ApiError);
   });
 });
 
 describe('FormsApiClient.exportSubmissionPdf', () => {
-  it('calls the submission PDF URL with Bearer header and encoded segments', async () => {
+  it('calls the submission PDF URL with Bearer header and UUID segments', async () => {
     const mockFetch = makeAuthFetch(200, '', Buffer.from('%PDF-1.7'));
     const client = makeClient(mockFetch);
-    await client.exportSubmissionPdf('form/1', 'sub/1');
+    await client.exportSubmissionPdf(FORM_UUID, SUB_UUID);
     expect(mockFetch).toHaveBeenCalledWith(
-      `${BASE}/api/forms/form%2F1/submissions/sub%2F1/submission-pdf`,
+      `${BASE}/api/forms/${FORM_UUID}/submissions/${SUB_UUID}/submission-pdf`,
       { headers: { Authorization: `Bearer ${API_KEY}` } },
     );
   });
@@ -560,7 +554,7 @@ describe('FormsApiClient.exportSubmissionPdf', () => {
     const pdf = Buffer.from('%PDF-1.7 fake pdf bytes');
     const mockFetch = makeAuthFetch(200, '', pdf);
     const client = makeClient(mockFetch);
-    const result = await client.exportSubmissionPdf('form-1', 'sub-1');
+    const result = await client.exportSubmissionPdf(FORM_UUID, SUB_UUID);
     expect(Buffer.isBuffer(result)).toBe(true);
     expect(result.equals(pdf)).toBe(true);
   });
@@ -568,7 +562,7 @@ describe('FormsApiClient.exportSubmissionPdf', () => {
   it('throws on non-200 status', async () => {
     const mockFetch = makeAuthFetch(500, 'boom');
     const client = makeClient(mockFetch);
-    await expect(client.exportSubmissionPdf('form-1', 'sub-1')).rejects.toMatchObject({
+    await expect(client.exportSubmissionPdf(FORM_UUID, SUB_UUID)).rejects.toMatchObject({
       statusCode: 500,
     });
   });
@@ -599,7 +593,7 @@ describe('FormsApiClient authenticated error mapping', () => {
   it('maps 404 to ApiError with not-found message', async () => {
     const mockFetch = makeAuthFetch(404, 'not found');
     const client = makeClient(mockFetch);
-    await expect(client.getFormAdmin('missing')).rejects.toMatchObject({
+    await expect(client.getFormAdmin(FORM_UUID)).rejects.toMatchObject({
       statusCode: 404,
       message: 'Form or submission not found.',
       suggestion: 'Check the ID and try again.',
@@ -620,18 +614,18 @@ describe('FormsApiClient without a Forms API key', () => {
   const cases: Array<[string, (client: FormsApiClient) => Promise<unknown>]> = [
     ['listForms', (c) => c.listForms({ customerId: 42 })],
     ['getFormStats', (c) => c.getFormStats()],
-    ['getFormAdmin', (c) => c.getFormAdmin('form-1')],
+    ['getFormAdmin', (c) => c.getFormAdmin(FORM_UUID)],
     [
       'createForm',
       (c) => c.createForm({ title: 't', customer_id: 1, form_json: {}, version: 1 }),
     ],
-    ['updateForm', (c) => c.updateForm('form-1', { title: 't' })],
-    ['archiveForm', (c) => c.archiveForm('form-1')],
-    ['unarchiveForm', (c) => c.unarchiveForm('form-1')],
-    ['copyForm', (c) => c.copyForm('form-1', 't')],
-    ['listSubmissions', (c) => c.listSubmissions('form-1', {})],
-    ['exportSubmissionsCsv', (c) => c.exportSubmissionsCsv('form-1')],
-    ['exportSubmissionPdf', (c) => c.exportSubmissionPdf('form-1', 'sub-1')],
+    ['updateForm', (c) => c.updateForm(FORM_UUID, { title: 't' })],
+    ['archiveForm', (c) => c.archiveForm(FORM_UUID)],
+    ['unarchiveForm', (c) => c.unarchiveForm(FORM_UUID)],
+    ['copyForm', (c) => c.copyForm(FORM_UUID, 't')],
+    ['listSubmissions', (c) => c.listSubmissions(FORM_UUID, {})],
+    ['exportSubmissionsCsv', (c) => c.exportSubmissionsCsv(FORM_UUID)],
+    ['exportSubmissionPdf', (c) => c.exportSubmissionPdf(FORM_UUID, SUB_UUID)],
   ];
 
   it.each(cases)('%s throws AuthError and never calls fetch', async (_name, call) => {
@@ -650,4 +644,93 @@ describe('FormsApiClient without a Forms API key', () => {
     const client = makeClient(mockFetch, null);
     await expect(client.getForm(FORM_ID)).resolves.toEqual(FORM_RESPONSE);
   });
+});
+
+describe('FormsApiClient URL-path sanitization (paubox-python3 pattern)', () => {
+  // Retargeted (`..`) calls return valid 200s so status-based assertions miss the bug.
+  // These tests assert on the SDK behaviour before any fetch fires.
+
+  const authMethods: Array<[string, (c: FormsApiClient, id: string) => Promise<unknown>]> = [
+    ['getFormAdmin', (c, id) => c.getFormAdmin(id)],
+    ['updateForm', (c, id) => c.updateForm(id, { title: 't' })],
+    ['archiveForm', (c, id) => c.archiveForm(id)],
+    ['unarchiveForm', (c, id) => c.unarchiveForm(id)],
+    ['listSubmissions', (c, id) => c.listSubmissions(id, {})],
+    ['exportSubmissionsCsv', (c, id) => c.exportSubmissionsCsv(id)],
+    ['exportSubmissionPdf', (c, id) => c.exportSubmissionPdf(id, SUB_UUID)],
+  ];
+
+  it.each(authMethods)('%s rejects "..": no fetch fires', async (_name, call) => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(call(client, '..')).rejects.toThrow(/path-traversal/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each(authMethods)('%s rejects "." : no fetch fires', async (_name, call) => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(call(client, '.')).rejects.toThrow(/path-traversal/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each(authMethods)('%s rejects empty string: no fetch fires', async (_name, call) => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(call(client, '')).rejects.toThrow(/formId is required/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each(authMethods)('%s rejects non-UUID: no fetch fires', async (_name, call) => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(call(client, 'not-a-uuid')).rejects.toThrow(/must be a UUID/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('exportSubmissionsCsv rejects "..": submissionId variant, no fetch fires', async () => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(client.exportSubmissionsCsv(FORM_UUID, '..')).rejects.toThrow(/path-traversal/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('exportSubmissionPdf rejects "..": submissionId, no fetch fires', async () => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(client.exportSubmissionPdf(FORM_UUID, '..')).rejects.toThrow(/path-traversal/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('exportSubmissionPdf rejects non-UUID submissionId: no fetch fires', async () => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(client.exportSubmissionPdf(FORM_UUID, 'not-a-uuid')).rejects.toThrow(
+      /must be a UUID/,
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  const publicMethods: Array<[string, (c: FormsApiClient, id: string) => Promise<unknown>]> = [
+    ['getForm', (c, id) => c.getForm(id)],
+    ['submitForm', (c, id) => c.submitForm(id, { form_data: {} })],
+  ];
+
+  it.each(publicMethods)('%s rejects "..": no fetch fires', async (_name, call) => {
+    const mockFetch = makeAuthFetch(200, {});
+    const client = makeClient(mockFetch);
+    await expect(call(client, '..')).rejects.toThrow(/path-traversal/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each(publicMethods)(
+    '%s still accepts non-UUID form ids (backwards compat)',
+    async (_name, call) => {
+      const mockFetch = makeAuthFetch(200, {});
+      const client = makeClient(mockFetch);
+      await expect(call(client, 'legacy-non-uuid-id')).resolves.not.toThrow();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
 });

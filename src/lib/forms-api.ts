@@ -1,4 +1,4 @@
-import { ApiError, AuthError } from './errors';
+import { ApiError, AuthError, ConfigError } from './errors';
 import type {
   CreateFormBody,
   FormGetResponse,
@@ -14,6 +14,23 @@ import type {
 
 const FORMS_BASE_URL = 'https://apx.paubox.com/forms';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function sanitizePathSegment(value: string, label: string, requireUuid: boolean): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new ConfigError(`${label} is required.`);
+  }
+  if (value === '.' || value === '..') {
+    throw new ConfigError(
+      `${label} cannot be "." or ".." — path-traversal segments are rejected.`,
+    );
+  }
+  if (requireUuid && !UUID_RE.test(value)) {
+    throw new ConfigError(`${label} must be a UUID.`);
+  }
+  return encodeURIComponent(value);
+}
+
 type FetchFn = typeof fetch;
 
 export class FormsApiClient {
@@ -26,7 +43,8 @@ export class FormsApiClient {
   }
 
   async getForm(formId: string): Promise<FormGetResponse> {
-    const url = `${FORMS_BASE_URL}/public/form_data/${encodeURIComponent(formId)}`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', false);
+    const url = `${FORMS_BASE_URL}/public/form_data/${safeFormId}`;
     const response = await this.fetchFn(url);
 
     if (!response.ok) {
@@ -41,7 +59,8 @@ export class FormsApiClient {
   }
 
   async submitForm(formId: string, payload: FormSubmissionPayload): Promise<void> {
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}/submissions`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', false);
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -111,7 +130,8 @@ export class FormsApiClient {
   }
 
   async getFormAdmin(formId: string): Promise<FormRecord> {
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (!response.ok) {
@@ -136,7 +156,8 @@ export class FormsApiClient {
   }
 
   async updateForm(formId: string, body: UpdateFormBody): Promise<void> {
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}`;
     const response = await this.fetchFn(url, {
       method: 'PUT',
       headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
@@ -149,7 +170,8 @@ export class FormsApiClient {
   }
 
   async archiveForm(formId: string): Promise<void> {
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}/archive`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/archive`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: this.authHeaders(),
@@ -161,7 +183,8 @@ export class FormsApiClient {
   }
 
   async unarchiveForm(formId: string): Promise<void> {
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}/unarchive`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/unarchive`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: this.authHeaders(),
@@ -197,8 +220,9 @@ export class FormsApiClient {
     if (params.order !== undefined) query.set('order', params.order);
     if (params.submissionId !== undefined) query.set('submission_id', params.submissionId);
 
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const qs = query.toString();
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}/submissions${
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions${
       qs ? `?${qs}` : ''
     }`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
@@ -210,9 +234,12 @@ export class FormsApiClient {
   }
 
   async exportSubmissionsCsv(formId: string, submissionId?: string): Promise<Buffer> {
-    const base = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}/submissions/submission-csv`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
+    const base = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions/submission-csv`;
     const url =
-      submissionId !== undefined ? `${base}/${encodeURIComponent(submissionId)}` : base;
+      submissionId !== undefined
+        ? `${base}/${sanitizePathSegment(submissionId, 'submissionId', true)}`
+        : base;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (response.status !== 200) {
@@ -222,7 +249,9 @@ export class FormsApiClient {
   }
 
   async exportSubmissionPdf(formId: string, submissionId: string): Promise<Buffer> {
-    const url = `${FORMS_BASE_URL}/api/forms/${encodeURIComponent(formId)}/submissions/${encodeURIComponent(submissionId)}/submission-pdf`;
+    const safeFormId = sanitizePathSegment(formId, 'formId', true);
+    const safeSubmissionId = sanitizePathSegment(submissionId, 'submissionId', true);
+    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions/${safeSubmissionId}/submission-pdf`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (response.status !== 200) {
