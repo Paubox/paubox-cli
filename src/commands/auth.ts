@@ -35,17 +35,33 @@ export function registerAuthCommands(program: Command): void {
         }
 
         const existing = await credentials.loadCredentials();
+        const sameAccount = existing?.apiUsername === apiUsername.trim();
+        const preservedFormsKey =
+          sameAccount && existing?.formsApiKey ? existing.formsApiKey : undefined;
+        const clearedFormsKey = !sameAccount && Boolean(existing?.formsApiKey);
+
         await credentials.saveCredentials({
           apiUsername: apiUsername.trim(),
           apiKey: apiKey.trim(),
-          ...(existing?.formsApiKey ? { formsApiKey: existing.formsApiKey } : {}),
+          ...(preservedFormsKey ? { formsApiKey: preservedFormsKey } : {}),
         });
 
         const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
         if (opts.json) {
-          printJson({ status: 'ok', apiUsername: apiUsername.trim(), storage });
+          printJson({
+            status: 'ok',
+            apiUsername: apiUsername.trim(),
+            storage,
+            formsApiKeyCleared: clearedFormsKey,
+          });
         } else {
           printSuccess(`Authenticated as ${apiUsername.trim()} (stored in ${storage})`, opts);
+          if (clearedFormsKey) {
+            printInfo(
+              'Forms API key from the previous account was cleared. Run `paubox auth set-forms-key` to add one for this account.',
+              opts,
+            );
+          }
         }
       } catch (err) {
         if (err instanceof AuthError) throw err;
@@ -70,8 +86,7 @@ export function registerAuthCommands(program: Command): void {
 
         const existing = await credentials.loadCredentials();
         await credentials.saveCredentials({
-          apiUsername: existing?.apiUsername ?? '',
-          apiKey: existing?.apiKey ?? '',
+          ...(existing ?? { apiUsername: '', apiKey: '' }),
           formsApiKey: formsApiKey.trim(),
         });
 

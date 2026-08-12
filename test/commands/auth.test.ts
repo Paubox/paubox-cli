@@ -293,13 +293,13 @@ describe('paubox auth logout', () => {
 });
 
 describe('paubox auth login', () => {
-  it('preserves an existing formsApiKey when re-logging in', async () => {
+  it('preserves an existing formsApiKey on same-account re-login', async () => {
     const { input, password } = await import('@inquirer/prompts');
     (input as jest.Mock).mockResolvedValue('myuser');
     (password as jest.Mock).mockResolvedValue('new-sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'olduser',
+      apiUsername: 'myuser',
       apiKey: 'old-sekret',
       formsApiKey: 'forms-key-9876',
     });
@@ -314,6 +314,52 @@ describe('paubox auth login', () => {
       apiKey: 'new-sekret',
       formsApiKey: 'forms-key-9876',
     });
+    writeSpy.mockRestore();
+  });
+
+  it('clears the previous formsApiKey on account switch', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('newuser');
+    (password as jest.Mock).mockResolvedValue('new-sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'olduser',
+      apiKey: 'old-sekret',
+      formsApiKey: 'forms-key-9876',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
+
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
+      apiUsername: 'newuser',
+      apiKey: 'new-sekret',
+    });
+    const saved = mockCredentials.saveCredentials.mock.calls[0][0];
+    expect(saved).not.toHaveProperty('formsApiKey');
+    writeSpy.mockRestore();
+  });
+
+  it('announces the cleared forms key in JSON output on account switch', async () => {
+    const { input, password } = await import('@inquirer/prompts');
+    (input as jest.Mock).mockResolvedValue('newuser');
+    (password as jest.Mock).mockResolvedValue('new-sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'olduser',
+      apiKey: 'old-sekret',
+      formsApiKey: 'forms-key-9876',
+    });
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed.formsApiKeyCleared).toBe(true);
     writeSpy.mockRestore();
   });
 

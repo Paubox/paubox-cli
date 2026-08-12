@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 import { FormsApiClient } from '../lib/forms-api';
 import * as credentials from '../lib/credentials';
 import { ConfigError } from '../lib/errors';
+import { writeExportFile } from '../lib/file-write';
 import { printJson, printSuccess, printInfo } from '../lib/output';
 import type {
   CreateFormBody,
@@ -93,6 +94,7 @@ interface SubmissionsCmdOptions {
 
 interface ExportCmdOptions {
   output?: string;
+  force?: boolean;
 }
 
 interface CopyCmdOptions {
@@ -247,6 +249,7 @@ export function registerFormsAdminCommands(forms: Command, program: Command): vo
     .command('export-csv <formId> [submissionId]')
     .description('Export submissions as CSV (requires a Forms API key)')
     .option('--output <path>', 'Output file path')
+    .option('--force', 'Overwrite an existing file at --output (symlinked destinations are always refused)')
     .action(async (formId: string, submissionId: string | undefined, cmdOpts: ExportCmdOptions) => {
       const opts = program.opts<OutputOptions>();
 
@@ -258,7 +261,7 @@ export function registerFormsAdminCommands(forms: Command, program: Command): vo
 
       const client = await createClient();
       const csv = await client.exportSubmissionsCsv(formId, submissionId);
-      fs.writeFileSync(outputPath, csv);
+      writeExportFile(outputPath, csv, cmdOpts.force ?? false);
 
       if (opts.json) {
         printJson({ status: 'ok', formId, output: outputPath });
@@ -271,6 +274,7 @@ export function registerFormsAdminCommands(forms: Command, program: Command): vo
     .command('export-pdf <formId> <submissionId>')
     .description('Export a submission as PDF (requires a Forms API key)')
     .option('--output <path>', 'Output file path')
+    .option('--force', 'Overwrite an existing file at --output (symlinked destinations are always refused)')
     .action(async (formId: string, submissionId: string, cmdOpts: ExportCmdOptions) => {
       const opts = program.opts<OutputOptions>();
 
@@ -278,7 +282,7 @@ export function registerFormsAdminCommands(forms: Command, program: Command): vo
 
       const client = await createClient();
       const pdf = await client.exportSubmissionPdf(formId, submissionId);
-      fs.writeFileSync(outputPath, pdf);
+      writeExportFile(outputPath, pdf, cmdOpts.force ?? false);
 
       if (opts.json) {
         printJson({ status: 'ok', formId, submissionId, output: outputPath });
