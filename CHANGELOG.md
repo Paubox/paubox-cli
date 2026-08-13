@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.3.0...paubox-cli-v0.4.0) (2026-08-13)
+
+
+### Features
+
+* add authenticated Forms API commands via scoped API keys ([#33](https://github.com/Paubox/paubox-cli/issues/33)) ([e7ecbe8](https://github.com/Paubox/paubox-cli/commit/e7ecbe8f34f4d12d0e5ad697aeda2b382eff09b0))
+
 ## [0.3.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.2.0...paubox-cli-v0.3.0) (2026-05-21)
 
 
