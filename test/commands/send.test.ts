@@ -5,6 +5,7 @@ import { createProgram } from '../../src/index';
 import * as credentials from '../../src/lib/credentials';
 import * as configStore from '../../src/lib/config-store';
 import { PauboxApiClient } from '../../src/lib/api';
+import type { PauboxCredentials } from '../../src/types';
 
 jest.mock('../../src/lib/credentials');
 jest.mock('../../src/lib/api', () => ({
@@ -29,7 +30,7 @@ afterEach(() => {
 });
 
 describe('paubox send', () => {
-  const baseCreds = { apiUsername: 'user', apiKey: 'key' };
+  const baseCreds = { apiKey: 'key' };
 
   it('throws AuthError when not authenticated', async () => {
     mockCredentials.loadCredentials.mockResolvedValue(null);
@@ -44,9 +45,8 @@ describe('paubox send', () => {
     ).rejects.toThrow();
   });
 
-  it('throws AuthError when only forms API key is configured (empty email fields)', async () => {
+  it('throws AuthError when only forms API key is configured (empty apiKey)', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: '',
       apiKey: '',
       formsApiKey: 'forms-key-9876',
     });
@@ -63,22 +63,27 @@ describe('paubox send', () => {
     expect(MockPauboxApiClient.prototype.sendEmail).not.toHaveBeenCalled();
   });
 
-  it('throws AuthError when apiKey is missing but apiUsername is present', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'user',
-      apiKey: '',
+  it('sends when a legacy stored blob still contains apiUsername (back-compat)', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue(
+      { apiUsername: 'old-user', apiKey: 'key' } as PauboxCredentials,
+    );
+    MockPauboxApiClient.prototype.sendEmail = jest.fn().mockResolvedValue({
+      sourceTrackingId: 'legacy-1',
+      data: 'ok',
     });
-    MockPauboxApiClient.prototype.sendEmail = jest.fn();
-    await expect(
-      createProgram().parseAsync([
-        'node', 'paubox', 'send',
-        '--to', 'to@example.com',
-        '--from', 'from@example.com',
-        '--subject', 'Hi',
-        '--text', 'Hello',
-      ]),
-    ).rejects.toThrow('Not authenticated.');
-    expect(MockPauboxApiClient.prototype.sendEmail).not.toHaveBeenCalled();
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync([
+      'node', 'paubox', 'send',
+      '--to', 'to@example.com',
+      '--from', 'from@example.com',
+      '--subject', 'Hi',
+      '--text', 'Hello',
+    ]);
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('legacy-1');
+    writeSpy.mockRestore();
   });
 
   it('sends email and prints tracking ID', async () => {

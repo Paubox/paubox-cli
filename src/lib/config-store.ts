@@ -49,18 +49,9 @@ export function getCredentials(): PauboxCredentials | null {
   return data.credentials ?? null;
 }
 
-export function saveCredentials(creds: PauboxCredentials): void;
-export function saveCredentials(apiUsername: string, apiKey: string): void;
-export function saveCredentials(
-  credsOrUsername: PauboxCredentials | string,
-  apiKey?: string,
-): void {
-  const creds: PauboxCredentials =
-    typeof credsOrUsername === 'string'
-      ? { apiUsername: credsOrUsername, apiKey: apiKey ?? '' }
-      : { ...credsOrUsername };
+export function saveCredentials(creds: PauboxCredentials): void {
   const data = readFile();
-  data.credentials = creds;
+  data.credentials = { ...creds };
   writeFile(data);
 }
 

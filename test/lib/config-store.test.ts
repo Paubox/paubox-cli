@@ -20,9 +20,9 @@ afterEach(() => {
 describe('config-store', () => {
   describe('credentials', () => {
     it('saves and loads credentials', () => {
-      configStore.saveCredentials('myuser', 'mykey');
+      configStore.saveCredentials({ apiKey: 'mykey' });
       const creds = configStore.getCredentials();
-      expect(creds).toEqual({ apiUsername: 'myuser', apiKey: 'mykey' });
+      expect(creds).toEqual({ apiKey: 'mykey' });
     });
 
     it('returns null when no credentials stored', () => {
@@ -30,28 +30,26 @@ describe('config-store', () => {
     });
 
     it('clears credentials', () => {
-      configStore.saveCredentials('myuser', 'mykey');
+      configStore.saveCredentials({ apiKey: 'mykey' });
       configStore.clearCredentials();
       expect(configStore.getCredentials()).toBeNull();
     });
 
     it('saves and loads a full credentials object with formsApiKey', () => {
       configStore.saveCredentials({
-        apiUsername: 'myuser',
         apiKey: 'mykey',
         formsApiKey: 'myformskey',
       });
       expect(configStore.getCredentials()).toEqual({
-        apiUsername: 'myuser',
         apiKey: 'mykey',
         formsApiKey: 'myformskey',
       });
     });
 
     it('saves a credentials object without formsApiKey', () => {
-      configStore.saveCredentials({ apiUsername: 'myuser', apiKey: 'mykey' });
+      configStore.saveCredentials({ apiKey: 'mykey' });
       const creds = configStore.getCredentials();
-      expect(creds).toEqual({ apiUsername: 'myuser', apiKey: 'mykey' });
+      expect(creds).toEqual({ apiKey: 'mykey' });
       expect(creds?.formsApiKey).toBeUndefined();
     });
 
@@ -61,23 +59,25 @@ describe('config-store', () => {
         JSON.stringify({ credentials: { apiUsername: 'olduser', apiKey: 'oldkey' } }),
       );
       const creds = configStore.getCredentials();
-      expect(creds).toEqual({ apiUsername: 'olduser', apiKey: 'oldkey' });
+      expect(creds).toEqual(expect.objectContaining({ apiKey: 'oldkey' }));
       expect(creds?.formsApiKey).toBeUndefined();
     });
 
-    it('overwriting with the legacy two-arg form drops a previously stored formsApiKey', () => {
-      configStore.saveCredentials({
-        apiUsername: 'myuser',
-        apiKey: 'mykey',
-        formsApiKey: 'myformskey',
-      });
-      configStore.saveCredentials('newuser', 'newkey');
-      expect(configStore.getCredentials()).toEqual({ apiUsername: 'newuser', apiKey: 'newkey' });
+    it('loads an old stored file with apiUsername and formsApiKey (back-compat)', () => {
+      fs.writeFileSync(
+        configStore.getConfigPath(),
+        JSON.stringify({
+          credentials: { apiUsername: 'olduser', apiKey: 'oldkey', formsApiKey: 'oldformskey' },
+        }),
+      );
+      const creds = configStore.getCredentials();
+      expect(creds).toEqual(
+        expect.objectContaining({ apiKey: 'oldkey', formsApiKey: 'oldformskey' }),
+      );
     });
 
     itUnix('sets file permissions to 0o600 with formsApiKey present (POSIX only)', () => {
       configStore.saveCredentials({
-        apiUsername: 'myuser',
         apiKey: 'mykey',
         formsApiKey: 'myformskey',
       });
@@ -86,7 +86,7 @@ describe('config-store', () => {
     });
 
     itUnix('sets file permissions to 0o600 (POSIX only)', () => {
-      configStore.saveCredentials('myuser', 'mykey');
+      configStore.saveCredentials({ apiKey: 'mykey' });
       const stat = fs.statSync(configStore.getConfigPath());
       // On Linux, mode includes file type bits; mask to permission bits only.
       // Windows ignores POSIX permission bits entirely (fs.statSync returns 0o666
@@ -113,11 +113,11 @@ describe('config-store', () => {
     });
 
     it('resets config without touching credentials', () => {
-      configStore.saveCredentials('myuser', 'mykey');
+      configStore.saveCredentials({ apiKey: 'mykey' });
       configStore.setConfigValue('defaultFrom', 'me@example.com');
       configStore.resetConfig();
       expect(configStore.listConfig()).toEqual({});
-      expect(configStore.getCredentials()).toEqual({ apiUsername: 'myuser', apiKey: 'mykey' });
+      expect(configStore.getCredentials()).toEqual({ apiKey: 'mykey' });
     });
 
     it('overwrites an existing config value', () => {

@@ -1,4 +1,4 @@
-import { input, password } from '@inquirer/prompts';
+import { password } from '@inquirer/prompts';
 import type { Command } from 'commander';
 import { PauboxApiClient } from '../lib/api';
 import * as credentials from '../lib/credentials';
@@ -17,54 +17,34 @@ export function registerAuthCommands(program: Command): void {
     .action(async () => {
       const opts = program.opts<OutputOptions>();
       try {
-        const apiUsername = await input({ message: 'API username (endpoint name):' });
         const apiKey = await password({ message: 'API key:', mask: '*' });
 
-        if (!apiUsername.trim() || !apiKey.trim()) {
-          throw new AuthError('API username and API key are required.');
+        if (!apiKey.trim()) {
+          throw new AuthError('API key is required.');
         }
 
         printInfo('Validating credentials…', opts);
-        const client = new PauboxApiClient({ apiUsername: apiUsername.trim(), apiKey: apiKey.trim() });
+        const client = new PauboxApiClient({ apiKey: apiKey.trim() });
         const valid = await client.validateCredentials();
         if (!valid) {
           throw new AuthError(
             'Credentials are invalid.',
-            'Check your API username and key in the Paubox dashboard.',
+            'Check your API key in the Paubox dashboard.',
           );
         }
 
         const existing = await credentials.loadCredentials();
-        const sameAccount =
-          !!existing?.apiUsername &&
-          existing.apiUsername.trim().toLowerCase() === apiUsername.trim().toLowerCase();
-        const preservedFormsKey =
-          sameAccount && existing?.formsApiKey ? existing.formsApiKey : undefined;
-        const clearedFormsKey =
-          !sameAccount && Boolean(existing?.formsApiKey) && Boolean(existing?.apiUsername);
-
         await credentials.saveCredentials({
-          apiUsername: apiUsername.trim(),
           apiKey: apiKey.trim(),
-          ...(preservedFormsKey ? { formsApiKey: preservedFormsKey } : {}),
+          ...(existing?.formsApiKey ? { formsApiKey: existing.formsApiKey } : {}),
         });
 
         const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
+        const masked = credentials.maskApiKey(apiKey.trim());
         if (opts.json) {
-          printJson({
-            status: 'ok',
-            apiUsername: apiUsername.trim(),
-            storage,
-            formsApiKeyCleared: clearedFormsKey,
-          });
+          printJson({ status: 'ok', apiKey: masked, storage });
         } else {
-          printSuccess(`Authenticated as ${apiUsername.trim()} (stored in ${storage})`, opts);
-          if (clearedFormsKey) {
-            printInfo(
-              'Forms API key from the previous account was cleared. Run `paubox auth set-forms-key` to add one for this account.',
-              opts,
-            );
-          }
+          printSuccess(`Authenticated (API key: ${masked}, stored in ${storage})`, opts);
         }
       } catch (err) {
         if (err instanceof AuthError) throw err;
@@ -87,9 +67,11 @@ export function registerAuthCommands(program: Command): void {
           throw new AuthError('Forms API key is required.');
         }
 
+        // Build the object explicitly (no spread) so legacy fields from
+        // pre-key-only stored blobs are dropped rather than re-persisted.
         const existing = await credentials.loadCredentials();
         await credentials.saveCredentials({
-          ...(existing ?? { apiUsername: '', apiKey: '' }),
+          apiKey: existing?.apiKey ?? '',
           formsApiKey: formsApiKey.trim(),
         });
 
@@ -125,7 +107,7 @@ export function registerAuthCommands(program: Command): void {
     .action(async () => {
       const opts = program.opts<OutputOptions>();
       const creds = await credentials.loadCredentials();
-      const emailAuthenticated = Boolean(creds && creds.apiUsername && creds.apiKey);
+      const emailAuthenticated = Boolean(creds && creds.apiKey);
       const maskedFormsKey = creds?.formsApiKey
         ? credentials.maskApiKey(creds.formsApiKey)
         : null;
@@ -144,7 +126,6 @@ export function registerAuthCommands(program: Command): void {
         if (emailAuthenticated) {
           printJson({
             authenticated: true,
-            apiUsername: creds.apiUsername,
             apiKey: credentials.maskApiKey(creds.apiKey),
             formsApiKey: maskedFormsKey,
             storage,
@@ -157,10 +138,7 @@ export function registerAuthCommands(program: Command): void {
 
       if (emailAuthenticated) {
         const masked = credentials.maskApiKey(creds.apiKey);
-        printSuccess(
-          `Authenticated as ${creds.apiUsername} (API key: ${masked}, stored in ${storage})`,
-          opts,
-        );
+        printSuccess(`Authenticated (API key: ${masked}, stored in ${storage})`, opts);
         if (maskedFormsKey) {
           printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
         } else {

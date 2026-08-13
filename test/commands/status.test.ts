@@ -40,9 +40,8 @@ describe('paubox status', () => {
     ).rejects.toThrow();
   });
 
-  it('throws AuthError when only forms API key is configured (empty email fields)', async () => {
+  it('throws AuthError when only forms API key is configured (empty apiKey)', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: '',
       apiKey: '',
       formsApiKey: 'forms-key-9876',
     });
@@ -53,20 +52,8 @@ describe('paubox status', () => {
     expect(MockPauboxApiClient.prototype.getMessageStatus).not.toHaveBeenCalled();
   });
 
-  it('throws AuthError when apiKey is missing but apiUsername is present', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'user',
-      apiKey: '',
-    });
-    MockPauboxApiClient.prototype.getMessageStatus = jest.fn();
-    await expect(
-      createProgram().parseAsync(['node', 'paubox', 'status', 'track-1']),
-    ).rejects.toThrow('Not authenticated.');
-    expect(MockPauboxApiClient.prototype.getMessageStatus).not.toHaveBeenCalled();
-  });
-
   it('prints a table of delivery statuses', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'u', apiKey: 'k' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.getMessageStatus = jest.fn().mockResolvedValue(mockStatusResponse);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
@@ -79,7 +66,7 @@ describe('paubox status', () => {
   });
 
   it('outputs JSON with --json flag', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'u', apiKey: 'k' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.getMessageStatus = jest.fn().mockResolvedValue(mockStatusResponse);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
@@ -92,7 +79,7 @@ describe('paubox status', () => {
   });
 
   it('reports no deliveries when list is empty', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'u', apiKey: 'k' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.getMessageStatus = jest.fn().mockResolvedValue({
       ...mockStatusResponse,
       data: { message: { id: 'x', message_deliveries: [] } },
