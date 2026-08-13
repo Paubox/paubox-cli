@@ -12,7 +12,37 @@ import type {
   UpdateFormBody,
 } from '../types';
 
-const FORMS_BASE_URL = 'https://apx.paubox.com/forms';
+export const DEFAULT_FORMS_BASE_URL = 'https://apx.paubox.com/forms';
+
+// The Forms API key is sent to whatever host this resolves to, so the override is
+// deliberately limited to http(s) origins. Anyone who can set the environment can
+// already read the stored credentials, so this is a guard against typos and
+// unsupported schemes rather than a trust boundary.
+export function resolveFormsBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env.PAUBOX_FORMS_URL?.trim();
+  if (!override) {
+    return DEFAULT_FORMS_BASE_URL;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(override);
+  } catch {
+    throw new ConfigError(
+      `PAUBOX_FORMS_URL is not a valid URL: ${override}`,
+      `Use a full base URL including the scheme, e.g. ${DEFAULT_FORMS_BASE_URL}.`,
+    );
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new ConfigError(
+      `PAUBOX_FORMS_URL must use http or https, got "${parsed.protocol}".`,
+      `Use a full base URL including the scheme, e.g. ${DEFAULT_FORMS_BASE_URL}.`,
+    );
+  }
+
+  return override.replace(/\/+$/, '');
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -36,15 +66,17 @@ type FetchFn = typeof fetch;
 export class FormsApiClient {
   private readonly fetchFn: FetchFn;
   private readonly apiKey: string | null;
+  private readonly baseUrl: string;
 
-  constructor(fetchFn?: FetchFn, apiKey?: string | null) {
+  constructor(fetchFn?: FetchFn, apiKey?: string | null, baseUrl?: string) {
     this.fetchFn = fetchFn ?? globalThis.fetch;
     this.apiKey = apiKey ?? null;
+    this.baseUrl = baseUrl ?? resolveFormsBaseUrl();
   }
 
   async getForm(formId: string): Promise<FormGetResponse> {
     const safeFormId = sanitizePathSegment(formId, 'formId', false);
-    const url = `${FORMS_BASE_URL}/public/form_data/${safeFormId}`;
+    const url = `${this.baseUrl}/public/form_data/${safeFormId}`;
     const response = await this.fetchFn(url);
 
     if (!response.ok) {
@@ -60,7 +92,7 @@ export class FormsApiClient {
 
   async submitForm(formId: string, payload: FormSubmissionPayload): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', false);
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions`;
+    const url = `${this.baseUrl}/api/forms/${safeFormId}/submissions`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -107,7 +139,7 @@ export class FormsApiClient {
     if (params.items !== undefined) query.set('items', String(params.items));
 
     const qs = query.toString();
-    const url = `${FORMS_BASE_URL}/api/forms${qs ? `?${qs}` : ''}`;
+    const url = `${this.baseUrl}/api/forms${qs ? `?${qs}` : ''}`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (!response.ok) {
@@ -120,7 +152,7 @@ export class FormsApiClient {
     const query = new URLSearchParams();
     if (customerId !== undefined) query.set('customer_id', String(customerId));
     const qs = query.toString();
-    const url = `${FORMS_BASE_URL}/api/forms/stats${qs ? `?${qs}` : ''}`;
+    const url = `${this.baseUrl}/api/forms/stats${qs ? `?${qs}` : ''}`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (!response.ok) {
@@ -131,7 +163,7 @@ export class FormsApiClient {
 
   async getFormAdmin(formId: string): Promise<FormRecord> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}`;
+    const url = `${this.baseUrl}/api/forms/${safeFormId}`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (!response.ok) {
@@ -142,7 +174,7 @@ export class FormsApiClient {
   }
 
   async createForm(body: CreateFormBody): Promise<{ id: string }> {
-    const url = `${FORMS_BASE_URL}/api/forms`;
+    const url = `${this.baseUrl}/api/forms`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
@@ -157,7 +189,7 @@ export class FormsApiClient {
 
   async updateForm(formId: string, body: UpdateFormBody): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}`;
+    const url = `${this.baseUrl}/api/forms/${safeFormId}`;
     const response = await this.fetchFn(url, {
       method: 'PUT',
       headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
@@ -171,7 +203,7 @@ export class FormsApiClient {
 
   async archiveForm(formId: string): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/archive`;
+    const url = `${this.baseUrl}/api/forms/${safeFormId}/archive`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: this.authHeaders(),
@@ -184,7 +216,7 @@ export class FormsApiClient {
 
   async unarchiveForm(formId: string): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/unarchive`;
+    const url = `${this.baseUrl}/api/forms/${safeFormId}/unarchive`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: this.authHeaders(),
@@ -196,7 +228,7 @@ export class FormsApiClient {
   }
 
   async copyForm(formId: string, title: string): Promise<FormRecord> {
-    const url = `${FORMS_BASE_URL}/api/forms/copy`;
+    const url = `${this.baseUrl}/api/forms/copy`;
     const response = await this.fetchFn(url, {
       method: 'POST',
       headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
@@ -222,7 +254,7 @@ export class FormsApiClient {
 
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const qs = query.toString();
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions${
+    const url = `${this.baseUrl}/api/forms/${safeFormId}/submissions${
       qs ? `?${qs}` : ''
     }`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
@@ -235,7 +267,7 @@ export class FormsApiClient {
 
   async exportSubmissionsCsv(formId: string, submissionId?: string): Promise<Buffer> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
-    const base = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions/submission-csv`;
+    const base = `${this.baseUrl}/api/forms/${safeFormId}/submissions/submission-csv`;
     const url =
       submissionId !== undefined
         ? `${base}/${sanitizePathSegment(submissionId, 'submissionId', true)}`
@@ -251,7 +283,7 @@ export class FormsApiClient {
   async exportSubmissionPdf(formId: string, submissionId: string): Promise<Buffer> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const safeSubmissionId = sanitizePathSegment(submissionId, 'submissionId', true);
-    const url = `${FORMS_BASE_URL}/api/forms/${safeFormId}/submissions/${safeSubmissionId}/submission-pdf`;
+    const url = `${this.baseUrl}/api/forms/${safeFormId}/submissions/${safeSubmissionId}/submission-pdf`;
     const response = await this.fetchFn(url, { headers: this.authHeaders() });
 
     if (response.status !== 200) {

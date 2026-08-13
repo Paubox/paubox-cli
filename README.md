@@ -359,6 +359,22 @@ paubox --json send --to to@example.com --from from@example.com --subject Hi --te
 # {"sourceTrackingId":"abc123-def456"}
 ```
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
+
+`PAUBOX_FORMS_URL` points the `paubox forms` commands at a non-production
+environment without patching and rebuilding:
+
+```bash
+PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms paubox forms list
+```
+
+Your Forms API key is sent to whatever host this resolves to, so only point it at
+Paubox-operated environments.
+
 ---
 
 ## Homebrew Tap Setup
