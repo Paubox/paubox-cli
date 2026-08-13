@@ -30,7 +30,7 @@ describe('PauboxApiClient', () => {
 
       expect(result.sourceTrackingId).toBe('track-1');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.paubox.net/v1/messages',
+        'https://api.paubox.com/v1/messages',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -90,7 +90,7 @@ describe('PauboxApiClient', () => {
       const result = await client.getMessageStatus('track-1');
       expect(result.sourceTrackingId).toBe('track-1');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.paubox.net/v1/message_receipt?sourceTrackingId=track-1',
+        'https://api.paubox.com/v1/message_receipt?sourceTrackingId=track-1',
         expect.objectContaining({
           headers: expect.objectContaining({ Authorization: 'Token token=testapikey' }),
         }),

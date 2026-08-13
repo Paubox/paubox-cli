@@ -72,7 +72,7 @@ export class PauboxApiClient {
   private readonly fetchFn: FetchFn;
 
   constructor(private readonly credentials: PauboxCredentials, fetchFn?: FetchFn) {
-    this.baseUrl = 'https://api.paubox.net/v1';
+    this.baseUrl = 'https://api.paubox.com/v1';
     this.fetchFn = fetchFn ?? globalThis.fetch;
   }
 
