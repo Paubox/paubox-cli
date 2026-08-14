@@ -27,7 +27,7 @@ export function registerSendCommand(program: Command): void {
       const opts = program.opts<OutputOptions>();
 
       const creds = await credentials.loadCredentials();
-      if (!creds?.apiKey || !creds?.apiUsername) throw new AuthError('Not authenticated.');
+      if (!creds?.apiKey) throw new AuthError('Not authenticated.');
 
       const from = cmdOpts.from ?? configStore.getConfigValue('defaultFrom');
       if (!from) {

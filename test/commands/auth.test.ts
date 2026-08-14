@@ -36,8 +36,8 @@ describe('paubox auth status', () => {
     writeSpy.mockRestore();
   });
 
-  it('treats empty-string email creds with no forms key as not authenticated', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: '', apiKey: '' });
+  it('treats an empty-string apiKey with no forms key as not authenticated', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: '' });
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
@@ -47,8 +47,8 @@ describe('paubox auth status', () => {
     writeSpy.mockRestore();
   });
 
-  it('shows apiUsername when authenticated', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+  it('shows the masked API key when authenticated', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockReturnValue('****ret');
     mockCredentials.usingKeychain.mockReturnValue(false);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -56,12 +56,13 @@ describe('paubox auth status', () => {
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
 
     const output = writeSpy.mock.calls.map((c) => c[0]).join('');
-    expect(output).toContain('myuser');
+    expect(output).toContain('Authenticated');
+    expect(output).toContain('****ret');
     writeSpy.mockRestore();
   });
 
   it('outputs JSON with --json flag', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockReturnValue('****ret');
     mockCredentials.usingKeychain.mockReturnValue(true);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -71,12 +72,12 @@ describe('paubox auth status', () => {
     const output = writeSpy.mock.calls.map((c) => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(parsed.authenticated).toBe(true);
-    expect(parsed.apiUsername).toBe('myuser');
+    expect(parsed).not.toHaveProperty('apiUsername');
     writeSpy.mockRestore();
   });
 
   it('JSON reports formsApiKey null when email-authenticated without a forms key', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -86,7 +87,6 @@ describe('paubox auth status', () => {
     const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
     expect(parsed).toEqual({
       authenticated: true,
-      apiUsername: 'myuser',
       apiKey: '****kret',
       formsApiKey: null,
       storage: 'OS keychain',
@@ -96,7 +96,6 @@ describe('paubox auth status', () => {
 
   it('JSON includes masked formsApiKey when email-authenticated with a forms key', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'myuser',
       apiKey: 'sekret',
       formsApiKey: 'forms-key-9876',
     });
@@ -109,7 +108,6 @@ describe('paubox auth status', () => {
     const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
     expect(parsed).toEqual({
       authenticated: true,
-      apiUsername: 'myuser',
       apiKey: '****kret',
       formsApiKey: '****9876',
       storage: 'config file',
@@ -117,9 +115,32 @@ describe('paubox auth status', () => {
     writeSpy.mockRestore();
   });
 
+  it('ignores a leftover apiUsername field from an old stored blob', async () => {
+    // Back-compat: blobs saved by older versions may still carry apiUsername.
+    mockCredentials.loadCredentials.mockResolvedValue({
+      apiUsername: 'olduser',
+      apiKey: 'sekret',
+      formsApiKey: 'forms-key-9876',
+    } as never);
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed).toEqual({
+      authenticated: true,
+      apiKey: '****kret',
+      formsApiKey: '****9876',
+      storage: 'config file',
+    });
+    expect(parsed).not.toHaveProperty('apiUsername');
+    writeSpy.mockRestore();
+  });
+
   it('human output shows the forms key line when set', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'myuser',
       apiKey: 'sekret',
       formsApiKey: 'forms-key-9876',
     });
@@ -130,13 +151,13 @@ describe('paubox auth status', () => {
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
 
     const output = writeSpy.mock.calls.map((c) => c[0]).join('');
-    expect(output).toContain('Authenticated as myuser');
+    expect(output).toContain('Authenticated');
     expect(output).toContain('Forms API key: ****9876');
     writeSpy.mockRestore();
   });
 
   it('human output suggests set-forms-key when authenticated without a forms key', async () => {
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -149,9 +170,8 @@ describe('paubox auth status', () => {
     writeSpy.mockRestore();
   });
 
-  it('reports forms-only credentials (empty email fields) as not email-authenticated', async () => {
+  it('reports forms-only credentials (empty apiKey) as not email-authenticated', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: '',
       apiKey: '',
       formsApiKey: 'forms-key-9876',
     });
@@ -170,7 +190,6 @@ describe('paubox auth status', () => {
 
   it('outputs forms-only JSON shape with authenticated false', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: '',
       apiKey: '',
       formsApiKey: 'forms-key-9876',
     });
@@ -191,7 +210,7 @@ describe('paubox auth status', () => {
 });
 
 describe('paubox auth set-forms-key', () => {
-  it('saves the forms key standalone with empty email fields when no creds exist', async () => {
+  it('saves the forms key standalone with an empty apiKey when no creds exist', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
     mockCredentials.loadCredentials.mockResolvedValue(null);
@@ -203,7 +222,6 @@ describe('paubox auth set-forms-key', () => {
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
 
     expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: '',
       apiKey: '',
       formsApiKey: 'forms-key-9876',
     });
@@ -214,10 +232,10 @@ describe('paubox auth set-forms-key', () => {
     writeSpy.mockRestore();
   });
 
-  it('preserves existing email credentials when saving the forms key', async () => {
+  it('preserves the existing apiKey when saving the forms key', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
-    mockCredentials.loadCredentials.mockResolvedValue({ apiUsername: 'myuser', apiKey: 'sekret' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
@@ -226,7 +244,6 @@ describe('paubox auth set-forms-key', () => {
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
 
     expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: 'myuser',
       apiKey: 'sekret',
       formsApiKey: 'forms-key-9876',
     });
@@ -244,7 +261,6 @@ describe('paubox auth set-forms-key', () => {
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
 
     expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: '',
       apiKey: '',
       formsApiKey: 'forms-key-9876',
     });
@@ -293,143 +309,96 @@ describe('paubox auth logout', () => {
 });
 
 describe('paubox auth login', () => {
-  it('preserves an existing formsApiKey on same-account re-login', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('myuser');
+  it('preserves an existing formsApiKey on re-login', async () => {
+    const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('new-sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
     mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'myuser',
       apiKey: 'old-sekret',
       formsApiKey: 'forms-key-9876',
     });
     mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
 
     expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: 'myuser',
       apiKey: 'new-sekret',
       formsApiKey: 'forms-key-9876',
     });
     writeSpy.mockRestore();
   });
 
-  it('clears the previous formsApiKey on account switch', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('newuser');
-    (password as jest.Mock).mockResolvedValue('new-sekret');
-    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'olduser',
-      apiKey: 'old-sekret',
-      formsApiKey: 'forms-key-9876',
-    });
-    mockCredentials.saveCredentials.mockResolvedValue();
-    mockCredentials.usingKeychain.mockReturnValue(false);
-    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-
-    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
-
-    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: 'newuser',
-      apiKey: 'new-sekret',
-    });
-    const saved = mockCredentials.saveCredentials.mock.calls[0][0];
-    expect(saved).not.toHaveProperty('formsApiKey');
-    writeSpy.mockRestore();
-  });
-
-  it('treats different-case usernames as the same account (preserves formsApiKey)', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('MyUser');
-    (password as jest.Mock).mockResolvedValue('new-sekret');
-    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'myuser',
-      apiKey: 'old-sekret',
-      formsApiKey: 'forms-key-9876',
-    });
-    mockCredentials.saveCredentials.mockResolvedValue();
-    mockCredentials.usingKeychain.mockReturnValue(false);
-    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-
-    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
-
-    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: 'MyUser',
-      apiKey: 'new-sekret',
-      formsApiKey: 'forms-key-9876',
-    });
-  });
-
-  it('does not report a "previous account cleared" when there was no prior account', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('firstuser');
-    (password as jest.Mock).mockResolvedValue('sekret');
-    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    // forms-only prior state (blocker-3 shape): set-forms-key ran first with no email creds
-    mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: '',
-      apiKey: '',
-      formsApiKey: 'forms-key-9876',
-    });
-    mockCredentials.saveCredentials.mockResolvedValue();
-    mockCredentials.usingKeychain.mockReturnValue(false);
-    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-
-    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);
-
-    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
-    expect(parsed.formsApiKeyCleared).toBe(false);
-    writeSpy.mockRestore();
-  });
-
-  it('announces the cleared forms key in JSON output on account switch', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('newuser');
-    (password as jest.Mock).mockResolvedValue('new-sekret');
-    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue({
-      apiUsername: 'olduser',
-      apiKey: 'old-sekret',
-      formsApiKey: 'forms-key-9876',
-    });
-    mockCredentials.saveCredentials.mockResolvedValue();
-    mockCredentials.usingKeychain.mockReturnValue(false);
-    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-
-    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);
-
-    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
-    expect(parsed.formsApiKeyCleared).toBe(true);
-    writeSpy.mockRestore();
-  });
-
-  it('saves only email credentials when no prior credentials exist', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('myuser');
+  it('saves only the apiKey when no prior credentials exist', async () => {
+    const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
     mockCredentials.loadCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
 
     expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({
-      apiUsername: 'myuser',
       apiKey: 'sekret',
     });
     writeSpy.mockRestore();
   });
 
+  it('prints the masked key and storage location on success', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(false);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('Authenticated (API key: ****kret, stored in config file)');
+    writeSpy.mockRestore();
+  });
+
+  it('outputs { status, apiKey, storage } JSON with --json flag', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    mockCredentials.usingKeychain.mockReturnValue(true);
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);
+
+    const parsed = JSON.parse(writeSpy.mock.calls.map((c) => c[0]).join(''));
+    expect(parsed).toEqual({
+      status: 'ok',
+      apiKey: '****kret',
+      storage: 'OS keychain',
+    });
+    writeSpy.mockRestore();
+  });
+
+  it('rejects with AuthError when the key is empty', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('   ');
+
+    await expect(
+      createProgram().parseAsync(['node', 'paubox', 'auth', 'login']),
+    ).rejects.toThrow('API key is required.');
+    expect(mockCredentials.saveCredentials).not.toHaveBeenCalled();
+  });
+
   it('throws AuthError on invalid credentials', async () => {
-    const { input, password } = await import('@inquirer/prompts');
-    (input as jest.Mock).mockResolvedValue('baduser');
+    const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('badkey');
 
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(false);

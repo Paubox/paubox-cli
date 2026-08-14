@@ -60,7 +60,7 @@ paubox status <trackingId>
 Manage Paubox API credentials.
 
 ```bash
-paubox auth login          # Prompt for API username and key; validate and store
+paubox auth login          # Prompt for API key; validate and store
 paubox auth set-forms-key  # Prompt for a Forms API key (scoped key with the "forms" scope)
 paubox auth logout         # Remove stored credentials (including the Forms API key)
 paubox auth status         # Show current authentication state

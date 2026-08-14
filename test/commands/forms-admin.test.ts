@@ -16,7 +16,7 @@ jest.mock('../../src/lib/api', () => ({
 const MockFormsApiClient = FormsApiClient as jest.MockedClass<typeof FormsApiClient>;
 const mockLoadCredentials = credentials.loadCredentials as jest.Mock;
 
-const CREDS = { apiUsername: 'user', apiKey: 'key', formsApiKey: 'forms-key-123' };
+const CREDS = { apiKey: 'key', formsApiKey: 'forms-key-123' };
 
 const LIST_RESPONSE = {
   results: [
@@ -698,7 +698,7 @@ describe('paubox forms create', () => {
   });
 
   it('surfaces AuthError when no forms API key is configured', async () => {
-    mockLoadCredentials.mockResolvedValue({ apiUsername: 'user', apiKey: 'key' });
+    mockLoadCredentials.mockResolvedValue({ apiKey: 'key' });
     MockFormsApiClient.prototype.createForm = jest
       .fn()
       .mockRejectedValue(new AuthError('No Forms API key configured.'));

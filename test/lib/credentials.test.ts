@@ -35,8 +35,8 @@ async function withCreds(
 describe('credentials (keytar unavailable → file fallback)', () => {
   it('saves and loads credentials via config file', async () => {
     await withCreds(null, async (creds) => {
-      await creds.saveCredentials({ apiUsername: 'testuser', apiKey: 'testkey123' });
-      expect(await creds.loadCredentials()).toEqual({ apiUsername: 'testuser', apiKey: 'testkey123' });
+      await creds.saveCredentials({ apiKey: 'testkey123' });
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'testkey123' });
     });
   });
 
@@ -48,7 +48,7 @@ describe('credentials (keytar unavailable → file fallback)', () => {
 
   it('clears credentials', async () => {
     await withCreds(null, async (creds) => {
-      await creds.saveCredentials({ apiUsername: 'testuser', apiKey: 'testkey123' });
+      await creds.saveCredentials({ apiKey: 'testkey123' });
       await creds.clearCredentials();
       expect(await creds.loadCredentials()).toBeNull();
     });
@@ -63,38 +63,50 @@ describe('credentials (keytar unavailable → file fallback)', () => {
   it('round-trips formsApiKey via config file', async () => {
     await withCreds(null, async (creds) => {
       await creds.saveCredentials({
-        apiUsername: 'testuser',
         apiKey: 'testkey123',
         formsApiKey: 'formskey456',
       });
       expect(await creds.loadCredentials()).toEqual({
-        apiUsername: 'testuser',
         apiKey: 'testkey123',
         formsApiKey: 'formskey456',
       });
     });
   });
 
-  it('round-trips forms-only credentials (empty email fields) via config file', async () => {
+  it('round-trips forms-only credentials (empty apiKey) via config file', async () => {
     await withCreds(null, async (creds) => {
-      await creds.saveCredentials({ apiUsername: '', apiKey: '', formsApiKey: 'formskey456' });
+      await creds.saveCredentials({ apiKey: '', formsApiKey: 'formskey456' });
       expect(await creds.loadCredentials()).toEqual({
-        apiUsername: '',
         apiKey: '',
         formsApiKey: 'formskey456',
       });
     });
   });
 
-  it('loads an old stored blob without formsApiKey (back-compat)', async () => {
+  it('loads an old stored blob containing apiUsername (back-compat)', async () => {
     await withCreds(null, async (creds) => {
       fs.writeFileSync(
         path.join(tmpDir, 'config.json'),
         JSON.stringify({ credentials: { apiUsername: 'olduser', apiKey: 'oldkey' } }),
       );
       const loaded = await creds.loadCredentials();
-      expect(loaded).toEqual({ apiUsername: 'olduser', apiKey: 'oldkey' });
+      expect(loaded).toEqual(expect.objectContaining({ apiKey: 'oldkey' }));
       expect(loaded?.formsApiKey).toBeUndefined();
+    });
+  });
+
+  it('loads an old stored blob with apiUsername and formsApiKey (back-compat)', async () => {
+    await withCreds(null, async (creds) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'config.json'),
+        JSON.stringify({
+          credentials: { apiUsername: 'olduser', apiKey: 'oldkey', formsApiKey: 'oldformskey' },
+        }),
+      );
+      const loaded = await creds.loadCredentials();
+      expect(loaded).toEqual(
+        expect.objectContaining({ apiKey: 'oldkey', formsApiKey: 'oldformskey' }),
+      );
     });
   });
 });
@@ -107,11 +119,11 @@ describe('credentials (keytar available)', () => {
       deletePassword: jest.fn().mockResolvedValue(true),
     };
     await withCreds(() => mockKeytar, async (creds) => {
-      await creds.saveCredentials({ apiUsername: 'u', apiKey: 'k' });
+      await creds.saveCredentials({ apiKey: 'k' });
       expect(mockKeytar.setPassword).toHaveBeenCalledWith(
         'paubox-cli',
         'default',
-        JSON.stringify({ apiUsername: 'u', apiKey: 'k' }),
+        JSON.stringify({ apiKey: 'k' }),
       );
     });
   });
@@ -119,11 +131,11 @@ describe('credentials (keytar available)', () => {
   it('loads from keychain', async () => {
     const mockKeytar = {
       setPassword: jest.fn(),
-      getPassword: jest.fn().mockResolvedValue(JSON.stringify({ apiUsername: 'u', apiKey: 'k' })),
+      getPassword: jest.fn().mockResolvedValue(JSON.stringify({ apiKey: 'k' })),
       deletePassword: jest.fn(),
     };
     await withCreds(() => mockKeytar, async (creds) => {
-      expect(await creds.loadCredentials()).toEqual({ apiUsername: 'u', apiKey: 'k' });
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'k' });
     });
   });
 
@@ -168,11 +180,11 @@ describe('credentials (keytar available)', () => {
       deletePassword: jest.fn().mockResolvedValue(true),
     };
     await withCreds(() => mockKeytar, async (creds) => {
-      await creds.saveCredentials({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' });
+      await creds.saveCredentials({ apiKey: 'k', formsApiKey: 'fk' });
       expect(mockKeytar.setPassword).toHaveBeenCalledWith(
         'paubox-cli',
         'default',
-        JSON.stringify({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' }),
+        JSON.stringify({ apiKey: 'k', formsApiKey: 'fk' }),
       );
     });
   });
@@ -182,15 +194,28 @@ describe('credentials (keytar available)', () => {
       setPassword: jest.fn(),
       getPassword: jest
         .fn()
-        .mockResolvedValue(JSON.stringify({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' })),
+        .mockResolvedValue(JSON.stringify({ apiKey: 'k', formsApiKey: 'fk' })),
       deletePassword: jest.fn(),
     };
     await withCreds(() => mockKeytar, async (creds) => {
       expect(await creds.loadCredentials()).toEqual({
-        apiUsername: 'u',
         apiKey: 'k',
         formsApiKey: 'fk',
       });
+    });
+  });
+
+  it('loads an old keychain blob containing apiUsername (back-compat)', async () => {
+    const mockKeytar = {
+      setPassword: jest.fn(),
+      getPassword: jest
+        .fn()
+        .mockResolvedValue(JSON.stringify({ apiUsername: 'u', apiKey: 'k', formsApiKey: 'fk' })),
+      deletePassword: jest.fn(),
+    };
+    await withCreds(() => mockKeytar, async (creds) => {
+      const loaded = await creds.loadCredentials();
+      expect(loaded).toEqual(expect.objectContaining({ apiKey: 'k', formsApiKey: 'fk' }));
     });
   });
 
@@ -204,7 +229,7 @@ describe('credentials (keytar available)', () => {
     };
     await withCreds(() => mockKeytar, async (creds) => {
       const loaded = await creds.loadCredentials();
-      expect(loaded).toEqual({ apiUsername: 'u', apiKey: 'k' });
+      expect(loaded).toEqual(expect.objectContaining({ apiKey: 'k' }));
       expect(loaded?.formsApiKey).toBeUndefined();
     });
   });

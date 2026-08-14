@@ -1,5 +1,4 @@
 export interface PauboxCredentials {
-  apiUsername: string;
   apiKey: string;
   formsApiKey?: string;
 }
