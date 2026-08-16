@@ -324,6 +324,147 @@ paubox forms update <formId> --title "Renamed form" --active false
 
 ---
 
+### `paubox marketing`
+
+Read-only access to Paubox Marketing — subscribers, lists, campaign mailings,
+analytics reports, and bulk job status.
+
+These commands use the API key stored by `paubox auth login`. No separate key is
+needed: they talk to the username-less marketing gateway at
+`https://api.paubox.com/v1/marketing`, which resolves your account from that key.
+
+Your account must have Paubox Marketing enabled. If it doesn't, the CLI reports
+`No Paubox Marketing account is associated with this API key.`
+
+#### `marketing subscribers list`
+
+```bash
+paubox marketing subscribers list
+paubox marketing subscribers list --search jane --items 25
+paubox marketing subscribers list --subscription-list-id <id> --order-by created_at --order desc
+paubox --json marketing subscribers list
+```
+
+| Flag | Description |
+|------|-------------|
+| `--search <text>` | Search text (defaults to all subscribers) |
+| `--subscription-list-id <id>` | Filter to a subscription list |
+| `--dynamic-list-id <id>` | Filter to a dynamic list |
+| `--page <n>` | Page number (default 1) |
+| `--items <n>` | Items per page (default 50, max 10000) |
+| `--order-by <col>` | `created_at`, `updated_at`, `email`, `first_name`, `last_name` |
+| `--order <asc\|desc>` | Sort direction |
+
+#### `marketing subscribers get <subscriberId>`
+
+```bash
+paubox marketing subscribers get <subscriberId>
+paubox marketing subscribers get <subscriberId> --subscription-list-id <id> --with-stats
+```
+
+| Flag | Description |
+|------|-------------|
+| `--subscription-list-id <id>` | Report unsubscribed state for this subscription list |
+| `--dynamic-list-id <id>` | Report unsubscribed state for this dynamic list |
+| `--with-stats` | Include delivery statistics |
+
+#### `marketing subscribers count`
+
+Subscribed count for a list. Defaults to the account's default list.
+
+```bash
+paubox marketing subscribers count
+paubox marketing subscribers count --subscription-list-id <id>
+```
+
+#### `marketing lists list`
+
+Lists both subscription lists and dynamic lists.
+
+```bash
+paubox marketing lists list
+paubox marketing lists list --search contacts --page 1 --items 25
+```
+
+| Flag | Description |
+|------|-------------|
+| `--search <text>` | Search list names |
+| `--page <n>` | Page number (enables pagination) |
+| `--items <n>` | Items per page (enables pagination, default 10) |
+| `--order-by <col>` | `name`, `created_at`, `updated_at`, `subscriber_count` |
+| `--order <asc\|desc>` | Sort direction |
+
+Pagination is off by default on this endpoint, so all lists are returned unless
+you pass `--page` or `--items`.
+
+#### `marketing campaigns list` / `marketing campaigns get <campaignId>`
+
+```bash
+paubox marketing campaigns list
+paubox marketing campaigns list --search newsletter --template-type standard
+paubox marketing campaigns get <campaignId>
+paubox marketing campaigns get <campaignId> --with-images
+```
+
+| Flag | Description |
+|------|-------------|
+| `--search <text>` | Search campaign subjects |
+| `--page <n>` | Page number (default 1) |
+| `--template-type <type>` | Filter by template type |
+| `--order-by <col>` | `created_at`, `updated_at`, `subject` |
+| `--order <asc\|desc>` | Sort direction |
+| `--with-images` | (`get` only) Include image data |
+
+`SENT` shows `N/A` when the backend cannot reconcile the sent count against the
+delivered count.
+
+#### `marketing analytics <type>`
+
+Fetches one analytics report. Output is always JSON, because each report has its
+own shape.
+
+```bash
+paubox marketing analytics campaign_mailing_send_totals
+paubox marketing analytics campaign_mailing_sends_table --start-date 2026-01-01 --end-date 2026-02-01
+paubox marketing analytics tracking_links_by_unique_link --campaign-mailing-send-id <id>
+```
+
+| Report type | Description |
+|-------------|-------------|
+| `campaign_mailing_send_totals` | Aggregate send totals |
+| `campaign_mailing_sends_table` | Per-send rows |
+| `campaign_mailing_deliveries_table` | Per-delivery rows for a send or mailing |
+| `subscribers_by_tracking_link` | Subscribers who clicked a given tracking link |
+| `tracking_links_by_unique_link` | Click counts grouped by link |
+
+| Flag | Description |
+|------|-------------|
+| `--campaign-mailing-send-id <id>` | Campaign mailing send ID |
+| `--campaign-mailing-id <id>` | Campaign mailing ID |
+| `--drip-campaign-id <id>` | Drip campaign ID |
+| `--email-type <type>` | Filter by email type |
+| `--html-id <id>` | Tracking link HTML ID |
+| `--search <text>` | Search text |
+| `--start-date <date>` / `--end-date <date>` | ISO 8601 date range |
+| `--by-date` | Group totals by date |
+| `--date-offset <n>` | Day offset used when `--by-date` has no explicit range |
+| `--with-stats` | Include per-row statistics |
+| `--order-by <col>` / `--order <asc\|desc>` | Sorting |
+
+Not every flag applies to every report; unrelated flags are ignored by the API.
+
+#### `marketing jobs list` / `marketing jobs get <bid>`
+
+Bulk operations in Paubox Marketing run asynchronously and return a batch ID.
+These commands report their progress.
+
+```bash
+paubox marketing jobs list          # in-flight and recently completed jobs
+paubox marketing jobs get <bid>     # status of a single batch
+```
+
+---
+
 ### `paubox config`
 
 Manage CLI configuration stored in `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows).
@@ -364,15 +505,17 @@ paubox --json send --to to@example.com --from from@example.com --subject Hi --te
 | Variable | Description |
 |----------|-------------|
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
+| `PAUBOX_MARKETING_URL` | Override the Marketing API base URL. Defaults to `https://api.paubox.com/v1/marketing`. Must be an `http` or `https` URL. |
 
-`PAUBOX_FORMS_URL` points the `paubox forms` commands at a non-production
+These point the `paubox forms` and `paubox marketing` commands at a non-production
 environment without patching and rebuilding:
 
 ```bash
 PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms paubox forms list
+PAUBOX_MARKETING_URL=https://api.staging.paubox.net/v1/marketing paubox marketing lists list
 ```
 
-Your Forms API key is sent to whatever host this resolves to, so only point it at
+Your API key is sent to whatever host these resolve to, so only point them at
 Paubox-operated environments.
 
 ---
@@ -428,8 +571,8 @@ npm run dev -- auth status  # Run without building
 
 ```
 src/
-  commands/       auth, send, status, config, forms, forms-admin command handlers
-  lib/            api client, forms API client, credential storage, config store, output helpers
+  commands/       auth, send, status, config, forms, forms-admin, marketing command handlers
+  lib/            api client, forms API client, marketing API client, credential storage, config store, output helpers
   index.ts        Library entry — exports createProgram() and run()
   cli.ts          Runtime entry — invokes run() (used by bin/ and `npm run dev`)
 bin/

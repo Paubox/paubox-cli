@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { registerAuthCommands } from './commands/auth';
 import { registerConfigCommands } from './commands/config';
 import { registerFormsCommands } from './commands/forms';
+import { registerMarketingCommands } from './commands/marketing';
 import { registerSendCommand } from './commands/send';
 import { registerStatusCommand } from './commands/status';
 import { PauboxError } from './lib/errors';
@@ -41,6 +42,7 @@ export function createProgram(): Command {
   registerStatusCommand(program);
   registerConfigCommands(program);
   registerFormsCommands(program);
+  registerMarketingCommands(program);
 
   return program;
 }
