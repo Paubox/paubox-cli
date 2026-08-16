@@ -324,6 +324,254 @@ paubox forms update <formId> --title "Renamed form" --active false
 
 ---
 
+### `paubox marketing`
+
+Access to Paubox Marketing — subscribers, lists, campaign mailings, analytics
+reports, and bulk job status.
+
+These commands use the API key stored by `paubox auth login`. No separate key is
+needed: they talk to the username-less marketing gateway at
+`https://api.paubox.com/v1/marketing`, which resolves your account from that key.
+
+Your account must have Paubox Marketing enabled. If it doesn't, the CLI reports
+`No Paubox Marketing account is associated with this API key.`
+
+#### `marketing subscribers list`
+
+```bash
+paubox marketing subscribers list
+paubox marketing subscribers list --search jane --items 25
+paubox marketing subscribers list --subscription-list-id <id> --order-by created_at --order desc
+paubox --json marketing subscribers list
+```
+
+| Flag | Description |
+|------|-------------|
+| `--search <text>` | Search text (defaults to all subscribers) |
+| `--subscription-list-id <id>` | Filter to a subscription list |
+| `--dynamic-list-id <id>` | Filter to a dynamic list |
+| `--page <n>` | Page number (default 1) |
+| `--items <n>` | Items per page (default 50, max 10000) |
+| `--order-by <col>` | `created_at`, `updated_at`, `email`, `first_name`, `last_name` |
+| `--order <asc\|desc>` | Sort direction |
+
+#### `marketing subscribers get <subscriberId>`
+
+```bash
+paubox marketing subscribers get <subscriberId>
+paubox marketing subscribers get <subscriberId> --subscription-list-id <id> --with-stats
+```
+
+| Flag | Description |
+|------|-------------|
+| `--subscription-list-id <id>` | Report unsubscribed state for this subscription list |
+| `--dynamic-list-id <id>` | Report unsubscribed state for this dynamic list |
+| `--with-stats` | Include delivery statistics |
+
+#### `marketing subscribers count`
+
+Subscribed count for a list. Defaults to the account's default list.
+
+```bash
+paubox marketing subscribers count
+paubox marketing subscribers count --subscription-list-id <id>
+```
+
+#### `marketing subscribers create` / `marketing subscribers update <subscriberId>`
+
+```bash
+paubox marketing subscribers create --email jane@example.com --first-name Jane --last-name Doe
+paubox marketing subscribers create --email jane@example.com --field "Clinic=North Campus" --field "Plan=Gold"
+paubox marketing subscribers update <subscriberId> --phone +15555550123
+```
+
+| Flag | Description |
+|------|-------------|
+| `--email <email>` | Email address |
+| `--first-name <name>` | First name |
+| `--last-name <name>` | Last name |
+| `--phone <number>` | Phone number (normalized to E.164 by the API) |
+| `--field <name=value>` | Custom field (repeatable) |
+| `--subscription-list-id <id>` | Also add to this subscription list |
+
+New subscribers are always added to the account's default list;
+`--subscription-list-id` adds them to one more list on top of that.
+
+A `--field` name that doesn't exist yet is **created** as a new custom field
+type on the account — a typo makes a new field rather than an error, so check
+names against `paubox marketing subscribers get`.
+
+#### `marketing subscribers export-csv` / `marketing subscribers export-dynamic-csv`
+
+Exports run as background jobs and are emailed to the address you give. Both
+print a job ID you can poll with `marketing jobs get`.
+
+```bash
+paubox marketing subscribers export-csv --email me@example.com
+paubox marketing subscribers export-csv --email me@example.com --from-subscription-list-id <id> --search jane
+paubox marketing subscribers export-dynamic-csv --email me@example.com --dynamic-list-id <id>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--email <email>` | **Required.** Address the export is emailed to |
+| `--from-subscription-list-id <id>` | (`export-csv`) Export from this subscription list |
+| `--search <text>` | (`export-csv`) Restrict the export to matching subscribers |
+| `--subscriber-id <id...>` | (`export-csv`) Export only these subscriber UUIDs |
+| `--except-id <id...>` | (`export-csv`) Exclude these subscriber UUIDs |
+| `--dynamic-list-id <id>` | (`export-dynamic-csv`) **Required.** Dynamic list to export |
+| `--order-by <col>` / `--order <asc\|desc>` | (`export-dynamic-csv`) Sorting |
+
+#### `marketing subscriptions subscribe` / `marketing subscriptions unsubscribe`
+
+```bash
+paubox marketing subscriptions subscribe --subscriber-id <uuid> --subscription-list-id <id>
+paubox marketing subscriptions unsubscribe --subscriber-id <uuid> --subscription-list-id <id>
+
+# Global opt-out across every list — prompts for confirmation
+paubox marketing subscriptions unsubscribe --subscriber-id <uuid>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--subscriber-id <id...>` | **Required.** Subscriber UUIDs |
+| `--subscription-list-id <id...>` | Limit the change to these lists |
+| `-y, --yes` | (`unsubscribe`) Skip the global-unsubscribe confirmation |
+
+**`unsubscribe` without `--subscription-list-id` is a global opt-out** — it
+suppresses the subscriber across every list, not just one. The CLI prompts
+before doing this. In a non-interactive shell it refuses unless you pass
+`--yes`, rather than hanging on a prompt nobody will answer.
+
+`subscribe` always clears any global opt-out, because a subscriber on any list
+is by definition not globally unsubscribed.
+
+#### `marketing subscription-lists` / `marketing dynamic-lists`
+
+Full CRUD for each list type. `marketing lists list` (below) is the combined
+read-only view across both.
+
+```bash
+paubox marketing subscription-lists list
+paubox marketing subscription-lists get default          # the account's default list
+paubox marketing subscription-lists get <id> --with-stats
+paubox marketing subscription-lists create --name "VIP customers"
+paubox marketing subscription-lists update <id> --name "VIPs"
+paubox marketing subscription-lists delete <id>          # prompts for confirmation
+
+paubox marketing dynamic-lists list
+paubox marketing dynamic-lists get <id>
+paubox marketing dynamic-lists create --name "Recent signups" --filters '[[{"field":"email","op":"contains","terms":["@example.com"]}]]'
+paubox marketing dynamic-lists create --name "Recent signups" --filters-file ./filters.json
+paubox marketing dynamic-lists update <id> --name "Renamed"
+paubox marketing dynamic-lists delete <id>               # prompts for confirmation
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name <name>` | List name (required on `create`) |
+| `--filters <json>` | (dynamic lists) Filter definition as JSON |
+| `--filters-file <path>` | (dynamic lists) Read the filter definition from a JSON file |
+| `--with-stats` | (`get`) Include send statistics |
+| `--page <n>` / `--items <n>` | (`list`) Pagination — off unless one is given |
+| `--order-by <col>` / `--order <asc\|desc>` | (`list`) Sorting |
+| `-y, --yes` | (`delete`) Skip the confirmation prompt |
+
+Deleting a subscription list removes its subscriptions and marks its drip
+campaigns completed. **The default list cannot be deleted** — the API accepts
+the request and silently does nothing.
+
+`--filters` and `--filters-file` are mutually exclusive, and the CLI validates
+that the value parses as JSON before sending it.
+
+#### `marketing lists list`
+
+Lists both subscription lists and dynamic lists.
+
+```bash
+paubox marketing lists list
+paubox marketing lists list --search contacts --page 1 --items 25
+```
+
+| Flag | Description |
+|------|-------------|
+| `--search <text>` | Search list names |
+| `--page <n>` | Page number (enables pagination) |
+| `--items <n>` | Items per page (enables pagination, default 10) |
+| `--order-by <col>` | `name`, `created_at`, `updated_at`, `subscriber_count` |
+| `--order <asc\|desc>` | Sort direction |
+
+Pagination is off by default on this endpoint, so all lists are returned unless
+you pass `--page` or `--items`.
+
+#### `marketing campaigns list` / `marketing campaigns get <campaignId>`
+
+```bash
+paubox marketing campaigns list
+paubox marketing campaigns list --search newsletter --template-type standard
+paubox marketing campaigns get <campaignId>
+paubox marketing campaigns get <campaignId> --with-images
+```
+
+| Flag | Description |
+|------|-------------|
+| `--search <text>` | Search campaign subjects |
+| `--page <n>` | Page number (default 1) |
+| `--template-type <type>` | Filter by template type |
+| `--order-by <col>` | `created_at`, `updated_at`, `subject` |
+| `--order <asc\|desc>` | Sort direction |
+| `--with-images` | (`get` only) Include image data |
+
+`SENT` shows `N/A` when the backend cannot reconcile the sent count against the
+delivered count.
+
+#### `marketing analytics <type>`
+
+Fetches one analytics report. Output is always JSON, because each report has its
+own shape.
+
+```bash
+paubox marketing analytics campaign_mailing_send_totals
+paubox marketing analytics campaign_mailing_sends_table --start-date 2026-01-01 --end-date 2026-02-01
+paubox marketing analytics tracking_links_by_unique_link --campaign-mailing-send-id <id>
+```
+
+| Report type | Description |
+|-------------|-------------|
+| `campaign_mailing_send_totals` | Aggregate send totals |
+| `campaign_mailing_sends_table` | Per-send rows |
+| `campaign_mailing_deliveries_table` | Per-delivery rows for a send or mailing |
+| `subscribers_by_tracking_link` | Subscribers who clicked a given tracking link |
+| `tracking_links_by_unique_link` | Click counts grouped by link |
+
+| Flag | Description |
+|------|-------------|
+| `--campaign-mailing-send-id <id>` | Campaign mailing send ID |
+| `--campaign-mailing-id <id>` | Campaign mailing ID |
+| `--drip-campaign-id <id>` | Drip campaign ID |
+| `--email-type <type>` | Filter by email type |
+| `--html-id <id>` | Tracking link HTML ID |
+| `--search <text>` | Search text |
+| `--start-date <date>` / `--end-date <date>` | ISO 8601 date range |
+| `--by-date` | Group totals by date |
+| `--date-offset <n>` | Day offset used when `--by-date` has no explicit range |
+| `--with-stats` | Include per-row statistics |
+| `--order-by <col>` / `--order <asc\|desc>` | Sorting |
+
+Not every flag applies to every report; unrelated flags are ignored by the API.
+
+#### `marketing jobs list` / `marketing jobs get <bid>`
+
+Bulk operations in Paubox Marketing run asynchronously and return a batch ID.
+These commands report their progress.
+
+```bash
+paubox marketing jobs list          # in-flight and recently completed jobs
+paubox marketing jobs get <bid>     # status of a single batch
+```
+
+---
+
 ### `paubox config`
 
 Manage CLI configuration stored in `~/.config/paubox/config.json` (Linux/macOS) or `%APPDATA%\paubox\config.json` (Windows).
@@ -364,15 +612,17 @@ paubox --json send --to to@example.com --from from@example.com --subject Hi --te
 | Variable | Description |
 |----------|-------------|
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
+| `PAUBOX_MARKETING_URL` | Override the Marketing API base URL. Defaults to `https://api.paubox.com/v1/marketing`. Must be an `http` or `https` URL. |
 
-`PAUBOX_FORMS_URL` points the `paubox forms` commands at a non-production
+These point the `paubox forms` and `paubox marketing` commands at a non-production
 environment without patching and rebuilding:
 
 ```bash
 PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms paubox forms list
+PAUBOX_MARKETING_URL=https://api.staging.paubox.net/v1/marketing paubox marketing lists list
 ```
 
-Your Forms API key is sent to whatever host this resolves to, so only point it at
+Your API key is sent to whatever host these resolve to, so only point them at
 Paubox-operated environments.
 
 ---
@@ -428,8 +678,8 @@ npm run dev -- auth status  # Run without building
 
 ```
 src/
-  commands/       auth, send, status, config, forms, forms-admin command handlers
-  lib/            api client, forms API client, credential storage, config store, output helpers
+  commands/       auth, send, status, config, forms, forms-admin, marketing command handlers
+  lib/            api client, forms API client, marketing API client, credential storage, config store, output helpers
   index.ts        Library entry — exports createProgram() and run()
   cli.ts          Runtime entry — invokes run() (used by bin/ and `npm run dev`)
 bin/
