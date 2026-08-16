@@ -326,8 +326,8 @@ paubox forms update <formId> --title "Renamed form" --active false
 
 ### `paubox marketing`
 
-Read-only access to Paubox Marketing — subscribers, lists, campaign mailings,
-analytics reports, and bulk job status.
+Access to Paubox Marketing — subscribers, lists, campaign mailings, analytics
+reports, and bulk job status.
 
 These commands use the API key stored by `paubox auth login`. No separate key is
 needed: they talk to the username-less marketing gateway at
@@ -376,6 +376,113 @@ Subscribed count for a list. Defaults to the account's default list.
 paubox marketing subscribers count
 paubox marketing subscribers count --subscription-list-id <id>
 ```
+
+#### `marketing subscribers create` / `marketing subscribers update <subscriberId>`
+
+```bash
+paubox marketing subscribers create --email jane@example.com --first-name Jane --last-name Doe
+paubox marketing subscribers create --email jane@example.com --field "Clinic=North Campus" --field "Plan=Gold"
+paubox marketing subscribers update <subscriberId> --phone +15555550123
+```
+
+| Flag | Description |
+|------|-------------|
+| `--email <email>` | Email address |
+| `--first-name <name>` | First name |
+| `--last-name <name>` | Last name |
+| `--phone <number>` | Phone number (normalized to E.164 by the API) |
+| `--field <name=value>` | Custom field (repeatable) |
+| `--subscription-list-id <id>` | Also add to this subscription list |
+
+New subscribers are always added to the account's default list;
+`--subscription-list-id` adds them to one more list on top of that.
+
+A `--field` name that doesn't exist yet is **created** as a new custom field
+type on the account — a typo makes a new field rather than an error, so check
+names against `paubox marketing subscribers get`.
+
+#### `marketing subscribers export-csv` / `marketing subscribers export-dynamic-csv`
+
+Exports run as background jobs and are emailed to the address you give. Both
+print a job ID you can poll with `marketing jobs get`.
+
+```bash
+paubox marketing subscribers export-csv --email me@example.com
+paubox marketing subscribers export-csv --email me@example.com --from-subscription-list-id <id> --search jane
+paubox marketing subscribers export-dynamic-csv --email me@example.com --dynamic-list-id <id>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--email <email>` | **Required.** Address the export is emailed to |
+| `--from-subscription-list-id <id>` | (`export-csv`) Export from this subscription list |
+| `--search <text>` | (`export-csv`) Restrict the export to matching subscribers |
+| `--subscriber-id <id...>` | (`export-csv`) Export only these subscriber UUIDs |
+| `--except-id <id...>` | (`export-csv`) Exclude these subscriber UUIDs |
+| `--dynamic-list-id <id>` | (`export-dynamic-csv`) **Required.** Dynamic list to export |
+| `--order-by <col>` / `--order <asc\|desc>` | (`export-dynamic-csv`) Sorting |
+
+#### `marketing subscriptions subscribe` / `marketing subscriptions unsubscribe`
+
+```bash
+paubox marketing subscriptions subscribe --subscriber-id <uuid> --subscription-list-id <id>
+paubox marketing subscriptions unsubscribe --subscriber-id <uuid> --subscription-list-id <id>
+
+# Global opt-out across every list — prompts for confirmation
+paubox marketing subscriptions unsubscribe --subscriber-id <uuid>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--subscriber-id <id...>` | **Required.** Subscriber UUIDs |
+| `--subscription-list-id <id...>` | Limit the change to these lists |
+| `-y, --yes` | (`unsubscribe`) Skip the global-unsubscribe confirmation |
+
+**`unsubscribe` without `--subscription-list-id` is a global opt-out** — it
+suppresses the subscriber across every list, not just one. The CLI prompts
+before doing this. In a non-interactive shell it refuses unless you pass
+`--yes`, rather than hanging on a prompt nobody will answer.
+
+`subscribe` always clears any global opt-out, because a subscriber on any list
+is by definition not globally unsubscribed.
+
+#### `marketing subscription-lists` / `marketing dynamic-lists`
+
+Full CRUD for each list type. `marketing lists list` (below) is the combined
+read-only view across both.
+
+```bash
+paubox marketing subscription-lists list
+paubox marketing subscription-lists get default          # the account's default list
+paubox marketing subscription-lists get <id> --with-stats
+paubox marketing subscription-lists create --name "VIP customers"
+paubox marketing subscription-lists update <id> --name "VIPs"
+paubox marketing subscription-lists delete <id>          # prompts for confirmation
+
+paubox marketing dynamic-lists list
+paubox marketing dynamic-lists get <id>
+paubox marketing dynamic-lists create --name "Recent signups" --filters '[[{"field":"email","op":"contains","terms":["@example.com"]}]]'
+paubox marketing dynamic-lists create --name "Recent signups" --filters-file ./filters.json
+paubox marketing dynamic-lists update <id> --name "Renamed"
+paubox marketing dynamic-lists delete <id>               # prompts for confirmation
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name <name>` | List name (required on `create`) |
+| `--filters <json>` | (dynamic lists) Filter definition as JSON |
+| `--filters-file <path>` | (dynamic lists) Read the filter definition from a JSON file |
+| `--with-stats` | (`get`) Include send statistics |
+| `--page <n>` / `--items <n>` | (`list`) Pagination — off unless one is given |
+| `--order-by <col>` / `--order <asc\|desc>` | (`list`) Sorting |
+| `-y, --yes` | (`delete`) Skip the confirmation prompt |
+
+Deleting a subscription list removes its subscriptions and marks its drip
+campaigns completed. **The default list cannot be deleted** — the API accepts
+the request and silently does nothing.
+
+`--filters` and `--filters-file` are mutually exclusive, and the CLI validates
+that the value parses as JSON before sending it.
 
 #### `marketing lists list`
 

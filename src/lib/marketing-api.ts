@@ -4,18 +4,26 @@ import type {
   BulkJobListResponse,
   CampaignGetResponse,
   CampaignListResponse,
+  CsvExportResponse,
+  DynamicListWriteBody,
+  ExportDynamicListCsvParams,
+  ExportSubscribersCsvParams,
   GetCampaignParams,
   GetSubscriberParams,
   ListCampaignsParams,
+  ListListsParams,
   ListMarketingListsParams,
   ListSubscribersParams,
   MarketingAnalyticsParams,
   MarketingAnalyticsType,
+  MarketingListGetResponse,
   MarketingListsResponse,
   SubscribedCountParams,
   SubscribedCountResponse,
   SubscriberGetResponse,
   SubscriberListResponse,
+  SubscriberWriteBody,
+  SubscriptionChangeBody,
 } from '../types';
 
 // The username-less marketing gateway. Unlike the legacy
@@ -77,6 +85,58 @@ function buildQuery(pairs: Record<string, QueryValue>): string {
   }
   const qs = query.toString();
   return qs ? `?${qs}` : '';
+}
+
+// The subscription_lists and dynamic_lists index endpoints share the same
+// pagination contract as /lists: page_info only appears when opted in.
+function listQuery(params: ListListsParams): string {
+  const paginated = params.page !== undefined || params.items !== undefined;
+  return buildQuery({
+    order_by: params.orderBy,
+    order: params.order,
+    page: params.page,
+    items: params.items,
+    use_pagination: paginated ? true : undefined,
+    with_stats: params.withStats === true ? 'true' : undefined,
+  });
+}
+
+function formatApiErrors(errors: unknown): string {
+  if (typeof errors === 'string') {
+    return errors;
+  }
+  if (Array.isArray(errors)) {
+    return errors
+      .map((entry) => (typeof entry === 'string' ? entry : JSON.stringify(entry)))
+      .join('; ');
+  }
+  if (errors !== null && typeof errors === 'object') {
+    return Object.entries(errors as Record<string, unknown>)
+      .map(([field, messages]) =>
+        Array.isArray(messages) ? `${field} ${messages.join(', ')}` : `${field} ${String(messages)}`,
+      )
+      .join('; ');
+  }
+  return String(errors);
+}
+
+function isEmptyErrors(errors: unknown): boolean {
+  if (errors === undefined || errors === null || errors === '') return true;
+  if (Array.isArray(errors)) return errors.length === 0;
+  if (typeof errors === 'object') return Object.keys(errors as object).length === 0;
+  return false;
+}
+
+function assertNoErrors(body: unknown): void {
+  if (body === null || typeof body !== 'object') return;
+  const errors = (body as { errors?: unknown }).errors;
+  if (isEmptyErrors(errors)) return;
+  throw new ApiError(
+    `Request rejected: ${formatApiErrors(errors)}`,
+    // The transport status really was 200 -- the rejection is in the body.
+    200,
+    'The Marketing API returned a validation error. Check the field values and try again.',
+  );
 }
 
 export class MarketingApiClient {
@@ -190,6 +250,148 @@ export class MarketingApiClient {
   async getBulkJob(bid: string): Promise<BulkJobGetResponse> {
     const safeBid = sanitizePathSegment(bid, 'bid');
     return this.getJson<BulkJobGetResponse>(`/bulk_jobs/${safeBid}`);
+  }
+
+  // --- Writes ---
+
+  async createSubscriber(body: SubscriberWriteBody): Promise<SubscriberGetResponse> {
+    return this.sendJson<SubscriberGetResponse>('POST', '/subscribers', body);
+  }
+
+  async updateSubscriber(
+    subscriberId: string,
+    body: SubscriberWriteBody,
+  ): Promise<SubscriberGetResponse> {
+    const safeId = sanitizePathSegment(subscriberId, 'subscriberId');
+    return this.sendJson<SubscriberGetResponse>('PATCH', `/subscribers/${safeId}`, body);
+  }
+
+  async exportSubscribersCsv(params: ExportSubscribersCsvParams): Promise<CsvExportResponse> {
+    const body: Record<string, unknown> = { email: params.email };
+    if (params.fromSubscriptionListId !== undefined) {
+      body.from_subscription_list_id = params.fromSubscriptionListId;
+    }
+    if (params.search !== undefined) body.search = params.search;
+    if (params.subscriberIds !== undefined) body.subscriber_ids = params.subscriberIds;
+    if (params.exceptIds !== undefined) body.except_ids = params.exceptIds;
+    return this.sendJson<CsvExportResponse>('POST', '/subscribers_export_csv', body);
+  }
+
+  async exportDynamicListCsv(params: ExportDynamicListCsvParams): Promise<CsvExportResponse> {
+    const body: Record<string, unknown> = {
+      email: params.email,
+      dynamic_list_id: params.dynamicListId,
+    };
+    if (params.orderBy !== undefined) body.order_by = params.orderBy;
+    if (params.order !== undefined) body.order = params.order;
+    return this.sendJson<CsvExportResponse>('POST', '/export_dynamic_list_csv', body);
+  }
+
+  async subscribe(body: SubscriptionChangeBody): Promise<SubscriberListResponse> {
+    return this.sendJson<SubscriberListResponse>('POST', '/subscriptions/subscribe', body);
+  }
+
+  async unsubscribe(body: SubscriptionChangeBody): Promise<SubscriberListResponse> {
+    return this.sendJson<SubscriberListResponse>('POST', '/subscriptions/unsubscribe', body);
+  }
+
+  // --- Subscription lists ---
+
+  async listSubscriptionLists(params: ListListsParams): Promise<MarketingListsResponse> {
+    return this.getJson<MarketingListsResponse>(`/subscription_lists${listQuery(params)}`);
+  }
+
+  async getSubscriptionList(
+    listId: string,
+    params: { withStats?: boolean } = {},
+  ): Promise<MarketingListGetResponse> {
+    const safeId = sanitizePathSegment(listId, 'listId');
+    const qs = buildQuery({ with_stats: params.withStats === true ? 'true' : undefined });
+    return this.getJson<MarketingListGetResponse>(`/subscription_lists/${safeId}${qs}`);
+  }
+
+  async createSubscriptionList(name: string): Promise<MarketingListGetResponse> {
+    return this.sendJson<MarketingListGetResponse>('POST', '/subscription_lists', { name });
+  }
+
+  async updateSubscriptionList(listId: string, name: string): Promise<MarketingListGetResponse> {
+    const safeId = sanitizePathSegment(listId, 'listId');
+    return this.sendJson<MarketingListGetResponse>('PATCH', `/subscription_lists/${safeId}`, {
+      name,
+    });
+  }
+
+  async deleteSubscriptionList(listId: string): Promise<void> {
+    const safeId = sanitizePathSegment(listId, 'listId');
+    await this.sendJson<unknown>('DELETE', `/subscription_lists/${safeId}`);
+  }
+
+  // --- Dynamic lists ---
+
+  async listDynamicLists(params: ListListsParams): Promise<MarketingListsResponse> {
+    return this.getJson<MarketingListsResponse>(`/dynamic_lists${listQuery(params)}`);
+  }
+
+  async getDynamicList(
+    listId: string,
+    params: { withStats?: boolean } = {},
+  ): Promise<MarketingListGetResponse> {
+    const safeId = sanitizePathSegment(listId, 'listId');
+    const qs = buildQuery({ with_stats: params.withStats === true ? 'true' : undefined });
+    return this.getJson<MarketingListGetResponse>(`/dynamic_lists/${safeId}${qs}`);
+  }
+
+  async createDynamicList(body: DynamicListWriteBody): Promise<MarketingListGetResponse> {
+    return this.sendJson<MarketingListGetResponse>('POST', '/dynamic_lists', body);
+  }
+
+  async updateDynamicList(
+    listId: string,
+    body: DynamicListWriteBody,
+  ): Promise<MarketingListGetResponse> {
+    const safeId = sanitizePathSegment(listId, 'listId');
+    return this.sendJson<MarketingListGetResponse>('PATCH', `/dynamic_lists/${safeId}`, body);
+  }
+
+  async deleteDynamicList(listId: string): Promise<void> {
+    const safeId = sanitizePathSegment(listId, 'listId');
+    await this.sendJson<unknown>('DELETE', `/dynamic_lists/${safeId}`);
+  }
+
+  private async sendJson<T>(
+    method: 'POST' | 'PATCH' | 'DELETE',
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
+    const init: RequestInit = { method, headers: this.authHeaders() };
+    if (body !== undefined) {
+      init.headers = { ...this.authHeaders(), 'Content-Type': 'application/json' };
+      init.body = JSON.stringify(body);
+    }
+
+    const response = await this.fetchFn(`${this.baseUrl}${path}`, init);
+
+    if (!response.ok) {
+      await this.handleError(response);
+    }
+
+    const text = await response.text();
+    if (text.trim() === '') {
+      return undefined as T;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new ApiError(`Unexpected non-JSON response: ${text}`, response.status);
+    }
+
+    // Validation failures on these endpoints come back as HTTP 200 with an
+    // `errors` key rather than a 4xx, so a bare status check would report
+    // a rejected write as a success.
+    assertNoErrors(parsed);
+    return parsed as T;
   }
 
   private async getJson<T>(path: string): Promise<T> {

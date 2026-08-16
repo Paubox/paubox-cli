@@ -328,6 +328,187 @@ describe('MarketingApiClient bulk jobs', () => {
   });
 });
 
+describe('MarketingApiClient writes', () => {
+  const JSON_AUTH = {
+    Authorization: `Bearer ${KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  it('posts a subscriber create body', async () => {
+    const mockFetch = makeFetch(200, { data: SUBSCRIBER });
+    const body = {
+      subscriber: { email: 'jane@example.com', custom_fields: [{ name: 'Clinic', value: 'North' }] },
+      subscription_list_id: 'list-1',
+    };
+    await client(mockFetch).createSubscriber(body);
+    expect(mockFetch).toHaveBeenCalledWith(`${DEFAULT_MARKETING_BASE_URL}/subscribers`, {
+      method: 'POST',
+      headers: JSON_AUTH,
+      body: JSON.stringify(body),
+    });
+  });
+
+  it('patches a subscriber update by ID', async () => {
+    const mockFetch = makeFetch(200, { data: SUBSCRIBER });
+    await client(mockFetch).updateSubscriber('sub-1', { subscriber: { first_name: 'Jan' } });
+    expect(mockFetch.mock.calls[0][0]).toBe(`${DEFAULT_MARKETING_BASE_URL}/subscribers/sub-1`);
+    expect((mockFetch.mock.calls[0][1] as { method: string }).method).toBe('PATCH');
+  });
+
+  it('treats a 200 carrying an errors hash as a failure', async () => {
+    const mockFetch = makeFetch(200, { errors: { email: ['already exists'] } });
+    await expect(
+      client(mockFetch).createSubscriber({ subscriber: { email: 'dupe@example.com' } }),
+    ).rejects.toThrow(/Request rejected: email already exists/);
+  });
+
+  it('treats a 200 carrying an errors string as a failure', async () => {
+    const mockFetch = makeFetch(200, { errors: 'something blew up' });
+    await expect(
+      client(mockFetch).subscribe({ subscriber_ids: ['sub-1'] }),
+    ).rejects.toThrow(/Request rejected: something blew up/);
+  });
+
+  it('does not treat an empty errors object as a failure', async () => {
+    const mockFetch = makeFetch(200, { data: SUBSCRIBER, errors: {} });
+    await expect(
+      client(mockFetch).createSubscriber({ subscriber: { email: 'jane@example.com' } }),
+    ).resolves.toMatchObject({ data: SUBSCRIBER });
+  });
+
+  it('tolerates an empty body on delete', async () => {
+    const mockFetch = makeFetch(200, '');
+    await expect(client(mockFetch).deleteSubscriptionList('7')).resolves.toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledWith(`${DEFAULT_MARKETING_BASE_URL}/subscription_lists/7`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${KEY}` },
+    });
+  });
+
+  it('reports a non-JSON body rather than throwing a parse error', async () => {
+    const mockFetch = makeFetch(200, '<html>gateway</html>');
+    await expect(client(mockFetch).deleteDynamicList('d-1')).rejects.toThrow(
+      /Unexpected non-JSON response/,
+    );
+  });
+
+  it('posts a subscribers CSV export request', async () => {
+    const mockFetch = makeFetch(200, { data: { sent_to_email: 'me@example.com', jid: 'j1' } });
+    await client(mockFetch).exportSubscribersCsv({
+      email: 'me@example.com',
+      fromSubscriptionListId: 'list-1',
+      search: 'jane',
+      subscriberIds: ['a', 'b'],
+      exceptIds: ['c'],
+    });
+    const [url, init] = mockFetch.mock.calls[0] as [string, { body: string }];
+    expect(url).toBe(`${DEFAULT_MARKETING_BASE_URL}/subscribers_export_csv`);
+    expect(JSON.parse(init.body)).toEqual({
+      email: 'me@example.com',
+      from_subscription_list_id: 'list-1',
+      search: 'jane',
+      subscriber_ids: ['a', 'b'],
+      except_ids: ['c'],
+    });
+  });
+
+  it('posts a dynamic list CSV export request', async () => {
+    const mockFetch = makeFetch(200, { data: { sent_to_email: 'me@example.com', jid: 'j2' } });
+    await client(mockFetch).exportDynamicListCsv({
+      email: 'me@example.com',
+      dynamicListId: 'dyn-1',
+      orderBy: 'created_at',
+      order: 'asc',
+    });
+    const [url, init] = mockFetch.mock.calls[0] as [string, { body: string }];
+    expect(url).toBe(`${DEFAULT_MARKETING_BASE_URL}/export_dynamic_list_csv`);
+    expect(JSON.parse(init.body)).toEqual({
+      email: 'me@example.com',
+      dynamic_list_id: 'dyn-1',
+      order_by: 'created_at',
+      order: 'asc',
+    });
+  });
+
+  it('posts subscribe and unsubscribe to their collection routes', async () => {
+    const mockFetch = makeFetch(200, { data: [] });
+    const c = client(mockFetch);
+    await c.subscribe({ subscriber_ids: ['a'], subscription_list_ids: ['1'] });
+    await c.unsubscribe({ subscriber_ids: ['a'] });
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      `${DEFAULT_MARKETING_BASE_URL}/subscriptions/subscribe`,
+    );
+    expect(mockFetch.mock.calls[1][0]).toBe(
+      `${DEFAULT_MARKETING_BASE_URL}/subscriptions/unsubscribe`,
+    );
+    expect(JSON.parse((mockFetch.mock.calls[1][1] as { body: string }).body)).toEqual({
+      subscriber_ids: ['a'],
+    });
+  });
+});
+
+describe('MarketingApiClient list resources', () => {
+  it('only opts into pagination when a page or items is given', async () => {
+    const mockFetch = makeFetch(200, { data: [] });
+    const c = client(mockFetch);
+    await c.listSubscriptionLists({});
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DEFAULT_MARKETING_BASE_URL}/subscription_lists`,
+      AUTH,
+    );
+
+    await c.listDynamicLists({ items: 25 });
+    const url = new URL(mockFetch.mock.calls[1][0] as string);
+    expect(url.pathname.endsWith('/dynamic_lists')).toBe(true);
+    expect(url.searchParams.get('use_pagination')).toBe('true');
+  });
+
+  it('supports the "default" alias on subscription list show', async () => {
+    const mockFetch = makeFetch(200, { data: null });
+    await client(mockFetch).getSubscriptionList('default');
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${DEFAULT_MARKETING_BASE_URL}/subscription_lists/default`,
+      AUTH,
+    );
+  });
+
+  it('sends with_stats as a string on list show', async () => {
+    const mockFetch = makeFetch(200, { data: null });
+    await client(mockFetch).getDynamicList('d-1', { withStats: true });
+    const url = new URL(mockFetch.mock.calls[0][0] as string);
+    expect(url.searchParams.get('with_stats')).toBe('true');
+  });
+
+  it('creates and renames subscription lists with a name payload', async () => {
+    const mockFetch = makeFetch(200, { data: null });
+    const c = client(mockFetch);
+    await c.createSubscriptionList('VIPs');
+    await c.updateSubscriptionList('7', 'VIPs renamed');
+    expect(JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body)).toEqual({
+      name: 'VIPs',
+    });
+    expect(JSON.parse((mockFetch.mock.calls[1][1] as { body: string }).body)).toEqual({
+      name: 'VIPs renamed',
+    });
+  });
+
+  it('sends dynamic list filters through as an opaque string', async () => {
+    const mockFetch = makeFetch(200, { data: null });
+    const filters = '[[{"field":"email","op":"contains","terms":["@example.com"]}]]';
+    await client(mockFetch).createDynamicList({ name: 'Recent', filters });
+    expect(JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body)).toEqual({
+      name: 'Recent',
+      filters,
+    });
+  });
+
+  it('rejects path-traversal segments on list IDs', async () => {
+    const mockFetch = makeFetch(200, {});
+    await expect(client(mockFetch).deleteSubscriptionList('..')).rejects.toThrow(ConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('MarketingApiClient base URL override', () => {
   const original = process.env.PAUBOX_MARKETING_URL;
 

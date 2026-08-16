@@ -372,6 +372,74 @@ export const MARKETING_ANALYTICS_TYPES = [
 
 export type MarketingAnalyticsType = (typeof MARKETING_ANALYTICS_TYPES)[number];
 
+// --- Marketing write operations ---
+
+export interface SubscriberCustomFieldInput {
+  name: string;
+  value: string;
+}
+
+// Any key here other than these four is treated as a custom field by
+// SubscriberCreator, so the CLI sends custom fields explicitly rather than
+// flattening them into the subscriber hash.
+export interface SubscriberWriteData {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  custom_fields?: SubscriberCustomFieldInput[];
+}
+
+export interface SubscriberWriteBody {
+  subscriber: SubscriberWriteData;
+  subscription_list_id?: string;
+}
+
+export interface CsvExportResponse {
+  data: {
+    sent_to_email: string;
+    jid: string;
+  };
+}
+
+export interface ExportSubscribersCsvParams {
+  email: string;
+  fromSubscriptionListId?: string;
+  search?: string;
+  subscriberIds?: string[];
+  exceptIds?: string[];
+}
+
+export interface ExportDynamicListCsvParams {
+  email: string;
+  dynamicListId: string;
+  orderBy?: string;
+  order?: 'asc' | 'desc';
+}
+
+export interface SubscriptionChangeBody {
+  subscriber_ids: string[];
+  subscription_list_ids?: string[];
+}
+
+export interface MarketingListGetResponse {
+  data: JsonApiResource<MarketingListAttributes> | null;
+}
+
+export interface ListListsParams {
+  orderBy?: string;
+  order?: 'asc' | 'desc';
+  page?: number;
+  items?: number;
+  withStats?: boolean;
+}
+
+export interface DynamicListWriteBody {
+  name?: string;
+  // The API stores this as an opaque scalar, so it travels as a JSON string.
+  filters?: string;
+}
+
 export interface MarketingAnalyticsParams {
   campaignMailingSendId?: string;
   campaignMailingId?: string;
