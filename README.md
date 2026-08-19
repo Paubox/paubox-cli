@@ -375,6 +375,29 @@ PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms paubox forms list
 Your Forms API key is sent to whatever host this resolves to, so only point it at
 Paubox-operated environments.
 
+## Versioning and stability
+
+`paubox-cli` follows [Semantic Versioning 2.0.0](https://semver.org). Published versions are plain `MAJOR.MINOR.PATCH` numbers; the `v` in the `paubox-cli-v<version>` git tags is a naming convention, not part of the version.
+
+Versions `0.1.0` through `0.4.0` were initial development releases and carried no stability guarantee. Starting with `1.0.0`, the following is the public API, and a backward-incompatible change to any of it requires a major release:
+
+| Covered | Notes |
+|---------|-------|
+| Command and subcommand names | `paubox send`, `paubox forms list`, and every other command documented above |
+| Documented flags | Long and short forms, argument arity, and defaults, as listed in this README |
+| `--json` output | Field names and types. New fields may appear in a minor release; existing fields are not renamed, retyped, or removed outside a major release |
+| Exit status | `0` on success, non-zero on failure |
+| Environment variables | The names and meanings of the variables documented above |
+| `engines.node` floor | Raising the minimum Node.js version is a breaking change |
+
+Everything else may change in any release, including a patch:
+
+- **Human-readable output.** The wording, colour, ordering, and layout of non-`--json` text on stdout and stderr, including error messages and the suggestion lines printed after a failure. Scripts should read `--json` and branch on zero versus non-zero exit status rather than matching on text or on a specific non-zero code.
+- **The library entry point.** `package.json` declares `main` and `types`, which makes `createProgram()` and `run()` importable as a byproduct of how the CLI is packaged. They are internal and unsupported — depend on the `paubox` executable, not on the module.
+- **Internal modules.** Everything under `src/lib/` (API clients, credential storage, config store, output helpers) and the TypeScript types it exports, including `PauboxCredentials`.
+- **On-disk layout.** The credential and config file format at `~/.config/paubox/config.json`, its Windows equivalent, and the OS keychain entries are implementation details. Read them through `paubox auth status` and `paubox config`.
+- **Pre-releases.** Anything published under a dist-tag other than `latest`.
+
 ---
 
 ## Homebrew Tap Setup
@@ -444,9 +467,9 @@ Releases are fully automated through [Release Please](https://github.com/googlea
 ### Flow
 
 1. Land changes on `master` using [Conventional Commits](https://www.conventionalcommits.org/):
-   - `fix: ...` → patch bump (e.g. 0.1.0 → 0.1.1)
-   - `feat: ...` → minor bump (e.g. 0.1.0 → 0.2.0)
-   - `feat!: ...` or `BREAKING CHANGE:` in the body → minor bump pre-1.0, major bump after 1.0
+   - `fix: ...` → patch bump (e.g. 1.0.0 → 1.0.1)
+   - `feat: ...` → minor bump (e.g. 1.0.0 → 1.1.0)
+   - `feat!: ...` or `BREAKING CHANGE:` in the body → major bump (e.g. 1.0.0 → 2.0.0)
    - `chore: ...`, `docs: ...`, `refactor: ...`, `test: ...` → no version bump
 2. The **release-please** workflow opens (or updates) a PR titled `chore(master): release <next-version>` with a generated `CHANGELOG.md` entry and the version bump in `package.json` and `.release-please-manifest.json`.
 3. When that PR is merged, the same workflow creates the `paubox-cli-v<version>` git tag + GitHub Release, then immediately runs a dependent `publish` job that validates the build and publishes to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements) via OIDC.
