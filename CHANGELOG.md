@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.4.0...paubox-cli-v1.0.0) (2026-08-19)
+
+First stable release. `paubox-cli` now has a declared public API and follows [Semantic Versioning](https://semver.org) against it — see [Versioning and stability](https://github.com/Paubox/paubox-cli#versioning-and-stability) for what the version number does and does not cover. Versions 0.1.0 through 0.4.0 were initial development releases and carried no stability guarantee.
+
+
+### ⚠ BREAKING CHANGES
+
+The authentication changes below landed in [#38](https://github.com/Paubox/paubox-cli/issues/38) but were never released, so they take effect for anyone upgrading from 0.4.0 or earlier.
+
+* **auth:** API authentication no longer uses a username. `paubox auth login` prompts for an API key only — scripts that drive it with piped stdin need their input updated.
+* **auth:** The Email API base URL moved from `https://api.paubox.net/v1/{username}` to `https://api.paubox.com/v1`.
+* `apiUsername` was removed from the `PauboxCredentials` type, and the `saveCredentials(username, key)` overload was removed. Both are internal as of this release; they are noted here for anyone who had been importing them.
+
+Existing stored credentials keep working without re-authenticating: the API key itself is unchanged, and the now-unused `apiUsername` field is ignored and dropped the next time credentials are written. Run `paubox auth status` to confirm.
+
+Because this is a major release, `^0.4.0` ranges will not resolve to 1.0.0. Upgrade explicitly:
+
+```bash
+npm install -g paubox-cli@latest
+```
+
+### Features
+
+* declare stable public API and drop username from authentication ([#40](https://github.com/Paubox/paubox-cli/issues/40)) ([3b281c8](https://github.com/Paubox/paubox-cli/commit/3b281c8ec2d3ca3290e639566cbc5a43e3a27916))
+
 ## [0.4.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.3.0...paubox-cli-v0.4.0) (2026-08-13)
 
 
