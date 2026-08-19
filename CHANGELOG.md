@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.4.0...paubox-cli-v1.0.0) (2026-08-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* declare stable public API and drop username from authentication ([#40](https://github.com/Paubox/paubox-cli/issues/40))
+
+### Features
+
+* declare stable public API and drop username from authentication ([#40](https://github.com/Paubox/paubox-cli/issues/40)) ([3b281c8](https://github.com/Paubox/paubox-cli/commit/3b281c8ec2d3ca3290e639566cbc5a43e3a27916))
+
 ## [0.4.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.3.0...paubox-cli-v0.4.0) (2026-08-13)
 
 
