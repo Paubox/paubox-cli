@@ -161,18 +161,6 @@ export class FormsApiClient {
     return response.json() as Promise<FormStatsResponse>;
   }
 
-  async getFormAdmin(formId: string): Promise<FormRecord> {
-    const safeFormId = sanitizePathSegment(formId, 'formId', true);
-    const url = `${this.baseUrl}/api/forms/${safeFormId}`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
-    const body = (await response.json()) as { data: FormRecord };
-    return body.data;
-  }
-
   async createForm(body: CreateFormBody): Promise<{ id: string }> {
     const url = `${this.baseUrl}/api/forms`;
     const response = await this.fetchFn(url, {
