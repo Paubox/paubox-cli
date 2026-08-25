@@ -72,7 +72,7 @@ export class PauboxApiClient {
   private readonly fetchFn: FetchFn;
 
   constructor(private readonly credentials: PauboxCredentials, fetchFn?: FetchFn) {
-    this.baseUrl = 'https://api.paubox.com/v1';
+    this.baseUrl = 'https://api.paubox.com/v1/email';
     this.fetchFn = fetchFn ?? globalThis.fetch;
   }
 
@@ -124,9 +124,12 @@ export class PauboxApiClient {
 
   async validateCredentials(): Promise<boolean> {
     try {
-      const response = await this.fetchFn(`${this.baseUrl}/messages`, {
-        headers: { Authorization: this.authHeader() },
-      });
+      // GET /messages is not a routed method, so it 404s for any key, valid or not.
+      // message_receipt does authenticate, so it is the only cheap 401 probe we have.
+      const response = await this.fetchFn(
+        `${this.baseUrl}/message_receipt?sourceTrackingId=credential-check`,
+        { headers: { Authorization: this.authHeader() } },
+      );
       return response.status !== 401;
     } catch {
       return false;
