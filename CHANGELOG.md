@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.0.0...paubox-cli-v1.0.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* target the /v1/email Email API base ([#45](https://github.com/Paubox/paubox-cli/issues/45)) ([49d78e1](https://github.com/Paubox/paubox-cli/commit/49d78e15efb0017d503913102c16248c366bf766))
+
 ## [1.0.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v0.4.0...paubox-cli-v1.0.0) (2026-08-19)
 
 First stable release. `paubox-cli` now has a declared public API and follows [Semantic Versioning](https://semver.org) against it — see [Versioning and stability](https://github.com/Paubox/paubox-cli#versioning-and-stability) for what the version number does and does not cover. Versions 0.1.0 through 0.4.0 were initial development releases and carried no stability guarantee.
