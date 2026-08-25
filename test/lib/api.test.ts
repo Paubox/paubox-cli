@@ -16,6 +16,15 @@ function makeFetch(status: number, body: unknown): jest.Mock {
 const creds = { apiKey: 'testapikey' };
 
 describe('PauboxApiClient', () => {
+  // 1.0.0 shipped 'https://api.paubox.com/v1' — correct host, missing /email — so
+  // every request 404d. Assert the segment directly so it cannot regress silently.
+  it('targets the documented /v1/email base', async () => {
+    const mockFetch = makeFetch(200, { sourceTrackingId: 't', data: 'ok' });
+    const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+    await client.sendEmail({ to: ['to@example.com'], from: 'f@example.com', subject: 's', text: 't' });
+    expect(String(mockFetch.mock.calls[0][0])).toMatch(/^https:\/\/api\.paubox\.com\/v1\/email\//);
+  });
+
   describe('sendEmail', () => {
     it('posts to the correct endpoint with auth header', async () => {
       const mockFetch = makeFetch(200, { sourceTrackingId: 'track-1', data: 'Service accepted' });
@@ -30,7 +39,7 @@ describe('PauboxApiClient', () => {
 
       expect(result.sourceTrackingId).toBe('track-1');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.paubox.com/v1/messages',
+        'https://api.paubox.com/v1/email/messages',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -90,7 +99,7 @@ describe('PauboxApiClient', () => {
       const result = await client.getMessageStatus('track-1');
       expect(result.sourceTrackingId).toBe('track-1');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.paubox.com/v1/message_receipt?sourceTrackingId=track-1',
+        'https://api.paubox.com/v1/email/message_receipt?sourceTrackingId=track-1',
         expect.objectContaining({
           headers: expect.objectContaining({ Authorization: 'Token token=testapikey' }),
         }),
@@ -112,6 +121,17 @@ describe('PauboxApiClient', () => {
   });
 
   describe('validateCredentials', () => {
+    it('probes message_receipt, which authenticates, not the unrouted GET /messages', async () => {
+      const mockFetch = makeFetch(404, {});
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      // A valid key on an unknown tracking id answers 404, so 404 must pass.
+      expect(await client.validateCredentials()).toBe(true);
+      expect(mockFetch.mock.calls[0][0]).toBe(
+        'https://api.paubox.com/v1/email/message_receipt?sourceTrackingId=credential-check',
+      );
+    });
+
     it('returns true when status is not 401', async () => {
       const mockFetch = makeFetch(200, {});
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
