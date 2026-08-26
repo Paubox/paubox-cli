@@ -60,10 +60,12 @@ function readDataFile(filePath: string): Record<string, string> {
   return obj as Record<string, string>;
 }
 
+// Commander omits a variadic option entirely when its flag is absent, so these
+// two arrive undefined however the declaration reads.
 interface FormsSubmitCmdOptions {
-  data: string[];
+  data?: string[];
   dataFile?: string;
-  attach: string[];
+  attach?: string[];
 }
 
 export function registerFormsCommands(program: Command): void {
