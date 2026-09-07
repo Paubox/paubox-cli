@@ -47,7 +47,7 @@ export function resolveFormsBaseUrl(env: NodeJS.ProcessEnv = process.env): strin
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function sanitizePathSegment(value: string, label: string, requireUuid: boolean): string {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (value.length === 0) {
     throw new ConfigError(`${label} is required.`);
   }
   if (value === '.' || value === '..') {
