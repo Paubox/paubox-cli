@@ -27,14 +27,7 @@ export function createProgram(): Command {
     .description('Official CLI for the Paubox encrypted email API')
     .version(readPackageVersion(), '-v, --version')
     .option('--json', 'Output as JSON')
-    .option('-q, --quiet', 'Suppress non-essential output')
-    .configureOutput({
-      writeErr: (str) => process.stderr.write(str),
-    });
-
-  program.hook('postAction', () => {
-    // no-op; errors are caught in parseAsync caller
-  });
+    .option('-q, --quiet', 'Suppress non-essential output');
 
   registerAuthCommands(program);
   registerSendCommand(program);

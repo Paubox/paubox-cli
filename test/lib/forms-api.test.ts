@@ -327,23 +327,6 @@ describe('FormsApiClient.getFormStats', () => {
   });
 });
 
-describe('FormsApiClient.getFormAdmin', () => {
-  it('calls GET /api/forms/:id with Bearer header and a UUID id', async () => {
-    const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
-    const client = makeClient(mockFetch);
-    await client.getFormAdmin(FORM_UUID);
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    });
-  });
-
-  it('unwraps the {data} envelope', async () => {
-    const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
-    const client = makeClient(mockFetch);
-    await expect(client.getFormAdmin(FORM_UUID)).resolves.toEqual(FORM_RECORD);
-  });
-});
-
 describe('FormsApiClient.createForm', () => {
   const createBody = {
     title: 'New Form',
@@ -593,7 +576,7 @@ describe('FormsApiClient authenticated error mapping', () => {
   it('maps 404 to ApiError with not-found message', async () => {
     const mockFetch = makeAuthFetch(404, 'not found');
     const client = makeClient(mockFetch);
-    await expect(client.getFormAdmin(FORM_UUID)).rejects.toMatchObject({
+    await expect(client.updateForm(FORM_UUID, { title: 't' })).rejects.toMatchObject({
       statusCode: 404,
       message: 'Form or submission not found.',
       suggestion: 'Check the ID and try again.',
@@ -614,7 +597,6 @@ describe('FormsApiClient without a Forms API key', () => {
   const cases: Array<[string, (client: FormsApiClient) => Promise<unknown>]> = [
     ['listForms', (c) => c.listForms({ customerId: 42 })],
     ['getFormStats', (c) => c.getFormStats()],
-    ['getFormAdmin', (c) => c.getFormAdmin(FORM_UUID)],
     [
       'createForm',
       (c) => c.createForm({ title: 't', customer_id: 1, form_json: {}, version: 1 }),
@@ -651,7 +633,6 @@ describe('FormsApiClient URL-path sanitization (paubox-python3 pattern)', () => 
   // These tests assert on the SDK behaviour before any fetch fires.
 
   const authMethods: Array<[string, (c: FormsApiClient, id: string) => Promise<unknown>]> = [
-    ['getFormAdmin', (c, id) => c.getFormAdmin(id)],
     ['updateForm', (c, id) => c.updateForm(id, { title: 't' })],
     ['archiveForm', (c, id) => c.archiveForm(id)],
     ['unarchiveForm', (c, id) => c.unarchiveForm(id)],

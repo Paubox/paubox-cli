@@ -77,17 +77,10 @@ export interface FormGetResponse {
   updated_at: string;
 }
 
-export interface FormSubmissionAttachment {
-  fileName: string;
-  contentType: string;
-  content: string;
-}
-
 export interface FormSubmissionPayload {
   form_data: Record<string, string>;
-  attachments?: FormSubmissionAttachment[];
+  attachments?: AttachmentOption[];
 }
-
 
 export interface FormRecord {
   id: string;
