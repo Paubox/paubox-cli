@@ -6,6 +6,9 @@ import type {
   MessageStatusResponse,
   PauboxCredentials,
   PauboxMessagePayload,
+  ScheduleEmailOptions,
+  ScheduleEmailResponse,
+  ScheduledMessageResponse,
   SendEmailOptions,
   SendEmailResponse,
 } from '../types';
@@ -120,6 +123,97 @@ export class PauboxApiClient {
     }
 
     return response.json() as Promise<MessageStatusResponse>;
+  }
+
+  async scheduleEmail(options: ScheduleEmailOptions): Promise<ScheduleEmailResponse> {
+    const payload = buildPayload(options);
+    const response = await this.fetchFn(`${this.baseUrl}/schedule`, {
+      method: 'POST',
+      headers: {
+        Authorization: this.authHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        data: {
+          ...payload.data,
+          scheduled_at: options.scheduledAt,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new AuthError(
+          'Authentication failed.',
+          'Check your API credentials with `paubox auth status` or re-run `paubox auth login`.',
+        );
+      }
+      const body = await response.text();
+      throw new ApiError(`Schedule failed (${response.status}): ${body}`, response.status);
+    }
+
+    return response.json() as Promise<ScheduleEmailResponse>;
+  }
+
+  async getScheduledMessage(sourceTrackingId: string): Promise<ScheduledMessageResponse> {
+    const response = await this.fetchFn(
+      `${this.baseUrl}/schedule/${encodeURIComponent(sourceTrackingId)}`,
+      { headers: { Authorization: this.authHeader() } },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new AuthError('Authentication failed.');
+      }
+      const body = await response.text();
+      throw new ApiError(`Get scheduled message failed (${response.status}): ${body}`, response.status);
+    }
+
+    return response.json() as Promise<ScheduledMessageResponse>;
+  }
+
+  async rescheduleMessage(sourceTrackingId: string, scheduledAt: string): Promise<ScheduledMessageResponse> {
+    const response = await this.fetchFn(
+      `${this.baseUrl}/schedule/${encodeURIComponent(sourceTrackingId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: this.authHeader(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scheduled_at: scheduledAt }),
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new AuthError('Authentication failed.');
+      }
+      const body = await response.text();
+      throw new ApiError(`Reschedule failed (${response.status}): ${body}`, response.status);
+    }
+
+    return response.json() as Promise<ScheduledMessageResponse>;
+  }
+
+  async cancelScheduledMessage(sourceTrackingId: string): Promise<ScheduledMessageResponse> {
+    const response = await this.fetchFn(
+      `${this.baseUrl}/schedule/${encodeURIComponent(sourceTrackingId)}/cancel`,
+      {
+        method: 'POST',
+        headers: { Authorization: this.authHeader() },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new AuthError('Authentication failed.');
+      }
+      const body = await response.text();
+      throw new ApiError(`Cancel failed (${response.status}): ${body}`, response.status);
+    }
+
+    return response.json() as Promise<ScheduledMessageResponse>;
   }
 
   async validateCredentials(): Promise<boolean> {

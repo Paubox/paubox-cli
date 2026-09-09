@@ -41,6 +41,25 @@ export interface SendEmailResponse {
   data: string;
 }
 
+export interface ScheduleEmailOptions extends SendEmailOptions {
+  scheduledAt: string;
+}
+
+export interface ScheduleEmailResponse {
+  sourceTrackingId: string;
+  scheduledAt: string;
+  state: string;
+  data: string;
+}
+
+export interface ScheduledMessageResponse {
+  sourceTrackingId: string;
+  scheduledAt: string;
+  state: string;
+  data?: string;
+  errors?: unknown;
+}
+
 export interface MessageDelivery {
   recipient: string;
   status: {
