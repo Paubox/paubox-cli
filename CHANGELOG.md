@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.0.1...paubox-cli-v1.1.0) (2026-09-09)
+
+
+### Features
+
+* add scheduled send support ([#48](https://github.com/Paubox/paubox-cli/issues/48)) ([a3ae557](https://github.com/Paubox/paubox-cli/commit/a3ae557e9bcffe2b65f7c42c7b0ae33538432504))
+
 ## [1.0.1](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.0.0...paubox-cli-v1.0.1) (2026-08-25)
 
 
