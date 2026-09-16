@@ -222,3 +222,32 @@ export interface OutputOptions {
   json?: boolean;
   quiet?: boolean;
 }
+
+export interface ReceivingDomain {
+  id: number;
+  slug: string;
+  [key: string]: unknown;
+}
+
+export interface ReceivingMailbox {
+  id: number;
+  name: string;
+  [key: string]: unknown;
+}
+
+export interface ReceivedEmail {
+  id: number;
+  [key: string]: unknown;
+}
+
+export interface ListReceivedEmailsParams {
+  limit?: number;
+  after?: string;
+  before?: string;
+}
+
+export interface CreateMailboxOptions {
+  name: string;
+  password: string;
+  quota_bytes?: number;
+}

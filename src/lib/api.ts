@@ -3,9 +3,14 @@ import * as path from 'path';
 import { ApiError, AuthError } from './errors';
 import type {
   AttachmentOption,
+  CreateMailboxOptions,
+  ListReceivedEmailsParams,
   MessageStatusResponse,
   PauboxCredentials,
   PauboxMessagePayload,
+  ReceivedEmail,
+  ReceivingDomain,
+  ReceivingMailbox,
   ScheduleEmailOptions,
   ScheduleEmailResponse,
   ScheduledMessageResponse,
@@ -214,6 +219,119 @@ export class PauboxApiClient {
     }
 
     return response.json() as Promise<ScheduledMessageResponse>;
+  }
+
+  private async receivingRequest(
+    path: string,
+    init?: RequestInit,
+  ): Promise<Response> {
+    const response = await this.fetchFn(`${this.baseUrl}${path}`, {
+      ...init,
+      headers: {
+        Authorization: this.authHeader(),
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new AuthError(
+          'Authentication failed.',
+          'Check your API credentials with `paubox auth status` or re-run `paubox auth login`.',
+        );
+      }
+      const body = await response.text();
+      throw new ApiError(`Request failed (${response.status}): ${body}`, response.status);
+    }
+    return response;
+  }
+
+  async listReceivingDomains(): Promise<ReceivingDomain[]> {
+    const response = await this.receivingRequest('/receiving/domains');
+    return response.json() as Promise<ReceivingDomain[]>;
+  }
+
+  async createReceivingDomain(slug?: string): Promise<ReceivingDomain> {
+    const body = slug !== undefined ? JSON.stringify({ slug }) : undefined;
+    const response = await this.receivingRequest('/receiving/domains', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      ...(body !== undefined ? { body } : {}),
+    });
+    return response.json() as Promise<ReceivingDomain>;
+  }
+
+  async getReceivingDomain(id: string): Promise<ReceivingDomain> {
+    const response = await this.receivingRequest(
+      `/receiving/domains/${encodeURIComponent(id)}`,
+    );
+    return response.json() as Promise<ReceivingDomain>;
+  }
+
+  async deleteReceivingDomain(id: string): Promise<void> {
+    await this.receivingRequest(
+      `/receiving/domains/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async listMailboxes(domainId: string): Promise<ReceivingMailbox[]> {
+    const response = await this.receivingRequest(
+      `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes`,
+    );
+    return response.json() as Promise<ReceivingMailbox[]>;
+  }
+
+  async createMailbox(
+    domainId: string,
+    options: CreateMailboxOptions,
+  ): Promise<ReceivingMailbox> {
+    const response = await this.receivingRequest(
+      `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options),
+      },
+    );
+    return response.json() as Promise<ReceivingMailbox>;
+  }
+
+  async getMailbox(domainId: string, mailboxId: string): Promise<ReceivingMailbox> {
+    const response = await this.receivingRequest(
+      `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
+    );
+    return response.json() as Promise<ReceivingMailbox>;
+  }
+
+  async deleteMailbox(domainId: string, mailboxId: string): Promise<void> {
+    await this.receivingRequest(
+      `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async listReceivedEmails(params?: ListReceivedEmailsParams): Promise<ReceivedEmail[]> {
+    const query = new URLSearchParams();
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.after !== undefined) query.set('after', params.after);
+    if (params?.before !== undefined) query.set('before', params.before);
+    const qs = query.toString();
+    const response = await this.receivingRequest(`/receiving${qs ? `?${qs}` : ''}`);
+    return response.json() as Promise<ReceivedEmail[]>;
+  }
+
+  async getReceivedEmail(emailId: string): Promise<ReceivedEmail> {
+    const response = await this.receivingRequest(
+      `/receiving/${encodeURIComponent(emailId)}`,
+    );
+    return response.json() as Promise<ReceivedEmail>;
+  }
+
+  async downloadAttachment(emailId: string, blobId: string): Promise<Buffer> {
+    const response = await this.receivingRequest(
+      `/receiving/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(blobId)}`,
+    );
+    return Buffer.from(await response.arrayBuffer());
   }
 
   async validateCredentials(): Promise<boolean> {
