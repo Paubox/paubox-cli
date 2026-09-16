@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { registerAuthCommands } from './commands/auth';
 import { registerConfigCommands } from './commands/config';
 import { registerFormsCommands } from './commands/forms';
+import { registerReceivingCommands } from './commands/receiving';
 import { registerScheduleCommand } from './commands/schedule';
 import { registerSendCommand } from './commands/send';
 import { registerStatusCommand } from './commands/status';
@@ -41,6 +42,7 @@ export function createProgram(): Command {
   registerSendCommand(program);
   registerScheduleCommand(program);
   registerStatusCommand(program);
+  registerReceivingCommands(program);
   registerConfigCommands(program);
   registerFormsCommands(program);
 
