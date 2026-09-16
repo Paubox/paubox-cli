@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.1.0...paubox-cli-v1.2.0) (2026-09-16)
+
+
+### Features
+
+* add receiving (inbound email) commands ([#51](https://github.com/Paubox/paubox-cli/issues/51)) ([fc71400](https://github.com/Paubox/paubox-cli/commit/fc714009d684512a61a24e50286326411c28f2f2))
+
 ## [1.1.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.0.1...paubox-cli-v1.1.0) (2026-09-09)
 
 
