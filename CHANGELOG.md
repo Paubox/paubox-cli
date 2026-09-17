@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.2.0...paubox-cli-v1.3.0) (2026-09-17)
+
+
+### Features
+
+* webhook endpoint management commands ([#53](https://github.com/Paubox/paubox-cli/issues/53)) ([7e32426](https://github.com/Paubox/paubox-cli/commit/7e3242641e9bda914321a0764585f0c58e2e9263))
+
 ## [1.2.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.1.0...paubox-cli-v1.2.0) (2026-09-16)
 
 
