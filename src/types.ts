@@ -251,3 +251,19 @@ export interface CreateMailboxOptions {
   password: string;
   quota_bytes?: number;
 }
+
+export interface WebhookEndpoint {
+  id: number;
+  target_url: string;
+  events: string[];
+  active: boolean;
+  signing_key: string | null;
+  api_key: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookEndpointResponse {
+  message: string;
+  data: WebhookEndpoint;
+}

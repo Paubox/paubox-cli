@@ -8,6 +8,7 @@ import { registerReceivingCommands } from './commands/receiving';
 import { registerScheduleCommand } from './commands/schedule';
 import { registerSendCommand } from './commands/send';
 import { registerStatusCommand } from './commands/status';
+import { registerWebhookCommands } from './commands/webhooks';
 import { PauboxError } from './lib/errors';
 import { printError } from './lib/output';
 
@@ -45,6 +46,7 @@ export function createProgram(): Command {
   registerReceivingCommands(program);
   registerConfigCommands(program);
   registerFormsCommands(program);
+  registerWebhookCommands(program);
 
   return program;
 }
