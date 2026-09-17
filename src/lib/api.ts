@@ -16,6 +16,8 @@ import type {
   ScheduledMessageResponse,
   SendEmailOptions,
   SendEmailResponse,
+  WebhookEndpoint,
+  WebhookEndpointResponse,
 } from '../types';
 
 const MIME_TYPES: Record<string, string> = {
@@ -332,6 +334,57 @@ export class PauboxApiClient {
       `/receiving/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(blobId)}`,
     );
     return Buffer.from(await response.arrayBuffer());
+  }
+
+  async listWebhookEndpoints(): Promise<WebhookEndpoint[]> {
+    const response = await this.receivingRequest('/webhook_endpoints');
+    return response.json() as Promise<WebhookEndpoint[]>;
+  }
+
+  async createWebhookEndpoint(
+    targetUrl: string,
+    events: string[],
+    signingKey?: string,
+    active?: boolean,
+  ): Promise<WebhookEndpointResponse> {
+    const body: Record<string, unknown> = { target_url: targetUrl, events };
+    if (signingKey !== undefined) body.signing_key = signingKey;
+    if (active !== undefined) body.active = active;
+    const response = await this.receivingRequest('/webhook_endpoints', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return response.json() as Promise<WebhookEndpointResponse>;
+  }
+
+  async getWebhookEndpoint(id: number): Promise<WebhookEndpointResponse> {
+    const response = await this.receivingRequest(
+      `/webhook_endpoints/${encodeURIComponent(id)}`,
+    );
+    return response.json() as Promise<WebhookEndpointResponse>;
+  }
+
+  async updateWebhookEndpoint(
+    id: number,
+    changes: Record<string, unknown>,
+  ): Promise<WebhookEndpointResponse> {
+    const response = await this.receivingRequest(
+      `/webhook_endpoints/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes),
+      },
+    );
+    return response.json() as Promise<WebhookEndpointResponse>;
+  }
+
+  async deleteWebhookEndpoint(id: number): Promise<void> {
+    await this.receivingRequest(
+      `/webhook_endpoints/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    );
   }
 
   async validateCredentials(): Promise<boolean> {
