@@ -4,11 +4,14 @@ import { ApiError, AuthError } from './errors';
 import type {
   AttachmentOption,
   CreateMailboxOptions,
+  DataResponse,
+  DownloadedAttachment,
   ListReceivedEmailsParams,
   MessageStatusResponse,
   PauboxCredentials,
   PauboxMessagePayload,
   ReceivedEmail,
+  ReceivedEmailList,
   ReceivingDomain,
   ReceivingMailbox,
   ScheduleEmailOptions,
@@ -35,6 +38,18 @@ const MIME_TYPES: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   zip: 'application/zip',
 };
+
+const STALE_EMAIL_ID_HINT =
+  'Received emails are identified by their Paubox email_id (a UUID); older mail-server ids no longer resolve. Run `paubox receiving emails list` to find it.';
+const STALE_ATTACHMENT_ID_HINT =
+  'Attachments are identified by their Paubox attachment id (a UUID); older blob ids no longer resolve. Run `paubox receiving emails get <emailId>` to list them.';
+
+function contentDispositionFilename(header: string | null): string | null {
+  if (!header) return null;
+  const match = /(?:^|;)\s*filename\s*=\s*(?:"([^"]*)"|([^;]*))/i.exec(header);
+  const filename = (match?.[1] ?? match?.[2] ?? '').trim();
+  return filename === '' ? null : filename;
+}
 
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).slice(1).toLowerCase();
@@ -226,6 +241,7 @@ export class PauboxApiClient {
   private async receivingRequest(
     path: string,
     init?: RequestInit,
+    notFoundSuggestion?: string,
   ): Promise<Response> {
     const response = await this.fetchFn(`${this.baseUrl}${path}`, {
       ...init,
@@ -242,7 +258,11 @@ export class PauboxApiClient {
         );
       }
       const body = await response.text();
-      throw new ApiError(`Request failed (${response.status}): ${body}`, response.status);
+      throw new ApiError(
+        `Request failed (${response.status}): ${body}`,
+        response.status,
+        response.status === 404 ? notFoundSuggestion : undefined,
+      );
     }
     return response;
   }
@@ -312,28 +332,36 @@ export class PauboxApiClient {
     );
   }
 
-  async listReceivedEmails(params?: ListReceivedEmailsParams): Promise<ReceivedEmail[]> {
+  async listReceivedEmails(params?: ListReceivedEmailsParams): Promise<ReceivedEmailList> {
     const query = new URLSearchParams();
     if (params?.limit !== undefined) query.set('limit', String(params.limit));
     if (params?.after !== undefined) query.set('after', params.after);
     if (params?.before !== undefined) query.set('before', params.before);
     const qs = query.toString();
     const response = await this.receivingRequest(`/receiving${qs ? `?${qs}` : ''}`);
-    return response.json() as Promise<ReceivedEmail[]>;
+    return response.json() as Promise<ReceivedEmailList>;
   }
 
-  async getReceivedEmail(emailId: string): Promise<ReceivedEmail> {
+  async getReceivedEmail(emailId: string): Promise<DataResponse<ReceivedEmail>> {
     const response = await this.receivingRequest(
       `/receiving/${encodeURIComponent(emailId)}`,
+      undefined,
+      STALE_EMAIL_ID_HINT,
     );
-    return response.json() as Promise<ReceivedEmail>;
+    return response.json() as Promise<DataResponse<ReceivedEmail>>;
   }
 
-  async downloadAttachment(emailId: string, blobId: string): Promise<Buffer> {
+  async downloadAttachment(emailId: string, attachmentId: string): Promise<DownloadedAttachment> {
     const response = await this.receivingRequest(
-      `/receiving/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(blobId)}`,
+      `/receiving/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      undefined,
+      STALE_ATTACHMENT_ID_HINT,
     );
-    return Buffer.from(await response.arrayBuffer());
+    return {
+      data: Buffer.from(await response.arrayBuffer()),
+      filename: contentDispositionFilename(response.headers.get('content-disposition')),
+      contentType: response.headers.get('content-type'),
+    };
   }
 
   async listWebhookEndpoints(): Promise<WebhookEndpoint[]> {

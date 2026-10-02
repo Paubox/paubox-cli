@@ -1,10 +1,15 @@
 import { PauboxApiClient } from '../../src/lib/api';
 import { ApiError, AuthError } from '../../src/lib/errors';
 
-function makeFetch(status: number, body: unknown): jest.Mock {
+function makeFetch(
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): jest.Mock {
   return jest.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers(headers),
     text: jest.fn().mockResolvedValue(JSON.stringify(body)),
     json: jest.fn().mockResolvedValue(body),
     arrayBuffer: jest.fn().mockResolvedValue(
@@ -12,6 +17,9 @@ function makeFetch(status: number, body: unknown): jest.Mock {
     ),
   });
 }
+
+const EMAIL_ID = '0192f0c4-0000-7000-8000-000000000001';
+const ATTACHMENT_ID = '0192f0c4-0000-7000-8000-0000000000a1';
 
 const creds = { apiKey: 'testapikey' };
 
@@ -175,63 +183,137 @@ describe('PauboxApiClient receiving', () => {
   });
 
   describe('listReceivedEmails', () => {
-    it('calls GET /receiving with no params', async () => {
-      const emails = [{ id: 1 }];
-      const mockFetch = makeFetch(200, emails);
+    it('calls GET /receiving with no params and returns the list envelope', async () => {
+      const list = {
+        object: 'list',
+        data: [{ email_id: EMAIL_ID, from: [], to: [], subject: null }],
+        has_more: false,
+      };
+      const mockFetch = makeFetch(200, list);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
       const result = await client.listReceivedEmails();
 
-      expect(result).toEqual(emails);
+      expect(result).toEqual(list);
       expect(mockFetch.mock.calls[0][0]).toBe(
         'https://api.paubox.com/v1/email/receiving',
       );
     });
 
     it('appends query params when provided', async () => {
-      const mockFetch = makeFetch(200, []);
+      const mockFetch = makeFetch(200, { object: 'list', data: [], has_more: false });
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
-      await client.listReceivedEmails({ limit: 10, after: 'cursor-abc' });
+      await client.listReceivedEmails({ limit: 10, after: EMAIL_ID, before: 'b' });
 
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toContain('limit=10');
-      expect(url).toContain('after=cursor-abc');
+      expect(url).toContain(`after=${EMAIL_ID}`);
+      expect(url).toContain('before=b');
     });
   });
 
   describe('getReceivedEmail', () => {
-    it('calls GET /receiving/:emailId', async () => {
-      const email = { id: 42, subject: 'Test' };
-      const mockFetch = makeFetch(200, email);
+    it('calls GET /receiving/:emailId and returns the data envelope', async () => {
+      const body = { data: { email_id: EMAIL_ID, subject: 'Test', attachments: [] } };
+      const mockFetch = makeFetch(200, body);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
-      const result = await client.getReceivedEmail('42');
+      const result = await client.getReceivedEmail(EMAIL_ID);
 
-      expect(result).toEqual(email);
+      expect(result).toEqual(body);
       expect(mockFetch.mock.calls[0][0]).toBe(
-        'https://api.paubox.com/v1/email/receiving/42',
+        `https://api.paubox.com/v1/email/receiving/${EMAIL_ID}`,
       );
+    });
+
+    it('explains Paubox email ids on 404', async () => {
+      const mockFetch = makeFetch(404, { error: 'not found' });
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      const err = await client.getReceivedEmail('eaaaaab').catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).statusCode).toBe(404);
+      expect((err as ApiError).suggestion).toContain('email_id');
+    });
+
+    it('does not attach the id hint to other errors', async () => {
+      const mockFetch = makeFetch(500, {});
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      const err = await client.getReceivedEmail(EMAIL_ID).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).suggestion).toBeUndefined();
     });
   });
 
   describe('downloadAttachment', () => {
-    it('calls GET /receiving/:emailId/attachments/:blobId and returns Buffer', async () => {
+    it('calls GET /receiving/:emailId/attachments/:attachmentId and returns raw bytes', async () => {
+      const mockFetch = makeFetch(200, {}, {
+        'content-type': 'application/pdf',
+        'content-disposition': 'attachment; filename="report.pdf"',
+      });
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      const result = await client.downloadAttachment(EMAIL_ID, ATTACHMENT_ID);
+
+      expect(Buffer.isBuffer(result.data)).toBe(true);
+      expect([...result.data]).toEqual([0x50, 0x4b]);
+      expect(result.filename).toBe('report.pdf');
+      expect(result.contentType).toBe('application/pdf');
+      expect(mockFetch.mock.calls[0][0]).toBe(
+        `https://api.paubox.com/v1/email/receiving/${EMAIL_ID}/attachments/${ATTACHMENT_ID}`,
+      );
+      const response = await mockFetch.mock.results[0].value;
+      expect(response.json).not.toHaveBeenCalled();
+    });
+
+    it('returns a null filename when Content-Disposition has none', async () => {
+      const mockFetch = makeFetch(200, {}, { 'content-disposition': 'attachment' });
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      const result = await client.downloadAttachment(EMAIL_ID, ATTACHMENT_ID);
+
+      expect(result.filename).toBeNull();
+    });
+
+    it('returns null filename and content type when the headers are absent', async () => {
       const mockFetch = makeFetch(200, {});
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
-      const result = await client.downloadAttachment('42', 'blob-1');
+      const result = await client.downloadAttachment(EMAIL_ID, ATTACHMENT_ID);
 
-      expect(Buffer.isBuffer(result)).toBe(true);
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        'https://api.paubox.com/v1/email/receiving/42/attachments/blob-1',
-      );
+      expect(result.filename).toBeNull();
+      expect(result.contentType).toBeNull();
+    });
+
+    it('reads an unquoted filename', async () => {
+      const mockFetch = makeFetch(200, {}, {
+        'content-disposition': 'attachment; filename=notes.txt; size=4',
+      });
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      const result = await client.downloadAttachment(EMAIL_ID, ATTACHMENT_ID);
+
+      expect(result.filename).toBe('notes.txt');
     });
 
     it('throws AuthError on 401', async () => {
       const mockFetch = makeFetch(401, {});
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
-      await expect(client.downloadAttachment('42', 'blob-1')).rejects.toThrow(AuthError);
+      await expect(client.downloadAttachment(EMAIL_ID, ATTACHMENT_ID)).rejects.toThrow(AuthError);
+    });
+
+    it('explains Paubox attachment ids on 404', async () => {
+      const mockFetch = makeFetch(404, { error: 'attachment not found' });
+      const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
+
+      const err = await client.downloadAttachment(EMAIL_ID, 'blob-1').catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).suggestion).toContain('attachment id');
     });
   });
 });

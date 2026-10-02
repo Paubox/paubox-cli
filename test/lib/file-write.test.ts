@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { writeExportFile } from '../../src/lib/file-write';
+import { safeFilename, writeExportFile } from '../../src/lib/file-write';
 import { ConfigError } from '../../src/lib/errors';
 
 const itUnix = process.platform === 'win32' ? it.skip : it;
@@ -104,5 +104,48 @@ describe('writeExportFile', () => {
 
     expect(fs.statSync(dest).mode & 0o777).toBe(0o600);
     expect(fs.readFileSync(dest, 'utf8')).toBe('replacement');
+  });
+});
+
+describe('safeFilename', () => {
+  it('keeps an ordinary filename', () => {
+    expect(safeFilename('report 2026.pdf')).toBe('report 2026.pdf');
+  });
+
+  it('drops directory components from either separator', () => {
+    expect(safeFilename('../../etc/passwd')).toBe('passwd');
+    expect(safeFilename('..\\..\\Windows\\win.ini')).toBe('win.ini');
+    expect(safeFilename('/abs/path/file.txt')).toBe('file.txt');
+  });
+
+  it('strips leading dots so a download cannot become a dotfile', () => {
+    expect(safeFilename('.zshenv')).toBe('zshenv');
+    expect(safeFilename('...bashrc')).toBe('bashrc');
+  });
+
+  it('replaces control and Windows-reserved characters', () => {
+    expect(safeFilename('a\u0000b\nc<>:"|?*.txt')).toBe('a_b_c_______.txt');
+  });
+
+  it('removes bidi override characters used to disguise extensions', () => {
+    expect(safeFilename('invoice\u202Efdp.exe')).toBe('invoicefdp.exe');
+  });
+
+  it('strips trailing dots and spaces', () => {
+    expect(safeFilename('file.txt. ')).toBe('file.txt');
+  });
+
+  it('returns null when nothing usable remains', () => {
+    expect(safeFilename('')).toBeNull();
+    expect(safeFilename('..')).toBeNull();
+    expect(safeFilename('dir/')).toBeNull();
+    expect(safeFilename(' . ')).toBeNull();
+  });
+
+  it('returns null for Windows device names', () => {
+    expect(safeFilename('CON')).toBeNull();
+    expect(safeFilename('nul.txt')).toBeNull();
+    expect(safeFilename('com1.pdf')).toBeNull();
+    expect(safeFilename('console.log')).toBe('console.log');
   });
 });

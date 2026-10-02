@@ -223,6 +223,10 @@ export interface OutputOptions {
   quiet?: boolean;
 }
 
+export interface DataResponse<T> {
+  data: T;
+}
+
 export interface ReceivingDomain {
   id: number;
   slug: string;
@@ -235,9 +239,64 @@ export interface ReceivingMailbox {
   [key: string]: unknown;
 }
 
+export interface ReceivedEmailAddress {
+  name: string | null;
+  address: string | null;
+}
+
+export interface ReceivedEmailAttachment {
+  id: string;
+  filename: string | null;
+  content_type: string | null;
+  size: number | null;
+  content_id: string | null;
+  download_url: string;
+}
+
+export interface ReceivedEmailSummary {
+  email_id: string;
+  from: ReceivedEmailAddress[];
+  to: ReceivedEmailAddress[];
+  subject: string | null;
+  received_at: string | null;
+  has_attachment: boolean | null;
+  spam: boolean;
+  size: number | null;
+  domain: string;
+}
+
+export interface ReceivedEmailList {
+  object: 'list';
+  data: ReceivedEmailSummary[];
+  has_more: boolean;
+}
+
 export interface ReceivedEmail {
-  id: number;
-  [key: string]: unknown;
+  email_id: string;
+  from: ReceivedEmailAddress[];
+  to: ReceivedEmailAddress[];
+  cc: ReceivedEmailAddress[];
+  subject: string | null;
+  date: string | null;
+  received_at: string | null;
+  message_id: string[] | null;
+  in_reply_to: string[] | null;
+  references: string[] | null;
+  spam: boolean;
+  spam_score: number | null;
+  text_body: string | null;
+  html_body: string | null;
+  attachments: ReceivedEmailAttachment[];
+  size: number | null;
+  authentication: { spf: string; dkim: string; dmarc: string };
+  domain: string;
+  headers: { name: string; value: string }[] | null;
+}
+
+export interface DownloadedAttachment {
+  data: Buffer;
+  filename: string | null;
+  contentType: string | null;
 }
 
 export interface ListReceivedEmailsParams {
