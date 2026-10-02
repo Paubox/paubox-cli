@@ -322,6 +322,48 @@ paubox forms update <formId> --title "Renamed form" --active false
 | `--subscription-list-id <id>` | New subscription list ID |
 | `--form-json-file <path>` | Path to a JSON file with the new form definition |
 
+##### `forms webhooks`
+
+Subscribe a URL of yours to Forms events, so Paubox posts to it when a submission comes in instead of you polling `forms submissions`.
+
+Deliveries are signed with a secret returned once, at creation. `--url` must be an `https` URL that resolves to a publicly routable address.
+
+```bash
+# Subscribe to forms.submission.created (the default)
+paubox forms webhooks create --url https://hooks.yourdomain.com/paubox
+
+paubox forms webhooks list
+paubox forms webhooks get <subscriptionId>
+paubox forms webhooks update <subscriptionId> --status disabled
+paubox forms webhooks delete <subscriptionId>
+```
+
+`create` prints the signing secret:
+
+```
+✓ Subscribed https://hooks.yourdomain.com/paubox to forms.submission.created.
+ID:         6f1c...
+...
+Signing secret: whsec_...
+Store it now — it is not shown again.
+```
+
+Use `--json` on `create` if you need to capture the secret programmatically; there is no way to retrieve it afterward, and losing it means replacing the subscription.
+
+| Command | Flag | Description |
+|---------|------|-------------|
+| `list` | `--page <n>` | Page number (default 1) |
+| `list` | `--items <n>` | Items per page (default 50, max 200) |
+| `create` | `--url <url>` | **Required.** Delivery target; must be an `https` URL |
+| `create` | `--events <events...>` | Events to subscribe to (default `forms.submission.created`) |
+| `update` | `--url <url>` | New delivery target |
+| `update` | `--events <events...>` | Replace the subscribed events |
+| `update` | `--status <active\|disabled>` | Pause or resume deliveries |
+
+Subscription IDs are UUIDs, as printed by `list`.
+
+An API key can only manage Forms subscriptions. Email API events exist on the same service but are console-only, so asking for one returns a 403 naming the event.
+
 ---
 
 ### `paubox config`
@@ -364,15 +406,17 @@ paubox --json send --to to@example.com --from from@example.com --subject Hi --te
 | Variable | Description |
 |----------|-------------|
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
+| `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox forms webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
 
-`PAUBOX_FORMS_URL` points the `paubox forms` commands at a non-production
-environment without patching and rebuilding:
+These point the `paubox forms` commands at a non-production environment without
+patching and rebuilding:
 
 ```bash
 PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms paubox forms list
+PAUBOX_WEBHOOKS_URL=https://api.staging.paubox.net/v1/webhooks paubox forms webhooks list
 ```
 
-Your Forms API key is sent to whatever host this resolves to, so only point it at
+Your Forms API key is sent to whatever host these resolve to, so only point them at
 Paubox-operated environments.
 
 ## Versioning and stability

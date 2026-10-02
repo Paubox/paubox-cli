@@ -326,3 +326,49 @@ export interface WebhookEndpointResponse {
   message: string;
   data: WebhookEndpoint;
 }
+
+// The webhooks service calls these endpoints; `WebhookEndpoint` above is the
+// Email API's unrelated resource of the same name, so these carry the
+// subscription wording the `forms webhooks` commands use.
+export interface WebhookSubscription {
+  id: string;
+  target_url: string;
+  status: string;
+  events: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatedWebhookSubscription extends WebhookSubscription {
+  signing_secret: string;
+}
+
+export interface WebhookSubscriptionResponse {
+  data: WebhookSubscription;
+}
+
+export interface CreatedWebhookSubscriptionResponse {
+  data: CreatedWebhookSubscription;
+  message?: string;
+}
+
+export interface WebhookSubscriptionListResponse {
+  data: WebhookSubscription[];
+  page_info: { count: number; items: number };
+}
+
+export interface ListWebhookSubscriptionsParams {
+  page?: number;
+  items?: number;
+}
+
+export interface CreateWebhookSubscriptionBody {
+  target_url: string;
+  events: string[];
+}
+
+export interface UpdateWebhookSubscriptionBody {
+  target_url?: string;
+  status?: 'active' | 'disabled';
+  events?: string[];
+}
