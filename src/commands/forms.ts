@@ -5,6 +5,7 @@ import { resolveAttachments } from '../lib/api';
 import { ConfigError } from '../lib/errors';
 import { printJson, printSuccess, printInfo } from '../lib/output';
 import { registerFormsAdminCommands } from './forms-admin';
+import { registerFormsWebhookCommands } from './forms-webhooks';
 import type { OutputOptions } from '../types';
 
 function parseDataPairs(pairs: string[]): Record<string, string> {
@@ -133,4 +134,5 @@ export function registerFormsCommands(program: Command): void {
     });
 
   registerFormsAdminCommands(forms, program);
+  registerFormsWebhookCommands(forms, program);
 }
