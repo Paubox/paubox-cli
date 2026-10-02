@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.3.0...paubox-cli-v1.3.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **receiving:** identify received emails and attachments by Paubox UUID ([#55](https://github.com/Paubox/paubox-cli/issues/55)) ([dfc01fb](https://github.com/Paubox/paubox-cli/commit/dfc01fbdb4a3ab8f3f3f9291592adaddfce48219))
+
 ## [1.3.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.2.0...paubox-cli-v1.3.0) (2026-09-17)
 
 
