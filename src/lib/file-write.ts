@@ -2,6 +2,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigError } from './errors';
 
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i;
+
+export function safeFilename(name: string): string | null {
+  const base = name.split(/[\\/]/).pop() ?? '';
+  const cleaned = base
+    .replace(/\p{Bidi_Control}/gu, '')
+    .replace(/[\p{Cc}<>:"|?*]/gu, '_')
+    .replace(/^[.\s]+/, '')
+    .replace(/[.\s]+$/, '');
+  if (cleaned === '' || WINDOWS_RESERVED_NAME.test(cleaned)) return null;
+  return cleaned;
+}
+
 export function writeExportFile(outputPath: string, data: Buffer, force: boolean): void {
   const resolved = path.resolve(outputPath);
 
