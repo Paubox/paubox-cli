@@ -50,15 +50,15 @@ export function registerReceivingCommands(program: Command): void {
         return;
       }
 
-      if (result.length === 0) {
+      if (result.data.length === 0) {
         printInfo('No receiving domains found.', opts);
         return;
       }
 
       printTable(
-        result.map((d) => ({
+        result.data.map((d) => ({
           id: String(d.id),
-          slug: d.slug,
+          domain: d.domain,
         })),
       );
     });
@@ -75,7 +75,7 @@ export function registerReceivingCommands(program: Command): void {
       if (opts.json) {
         printJson(result);
       } else {
-        printSuccess(`Receiving domain created: ${result.id} (${result.slug})`, opts);
+        printSuccess(`Receiving domain created: ${result.data.id} (${result.data.domain})`, opts);
       }
     });
 
@@ -90,8 +90,8 @@ export function registerReceivingCommands(program: Command): void {
       if (opts.json) {
         printJson(result);
       } else {
-        printInfo(`ID:   ${result.id}`, opts);
-        printInfo(`Slug: ${result.slug}`, opts);
+        printInfo(`ID:     ${result.data.id}`, opts);
+        printInfo(`Domain: ${result.data.domain}`, opts);
       }
     });
 
@@ -127,13 +127,13 @@ export function registerReceivingCommands(program: Command): void {
         return;
       }
 
-      if (result.length === 0) {
+      if (result.data.length === 0) {
         printInfo('No mailboxes found.', opts);
         return;
       }
 
       printTable(
-        result.map((m) => ({
+        result.data.map((m) => ({
           id: String(m.id),
           name: m.name,
         })),
@@ -164,7 +164,7 @@ export function registerReceivingCommands(program: Command): void {
       if (opts.json) {
         printJson(result);
       } else {
-        printSuccess(`Mailbox created: ${result.id} (${result.name})`, opts);
+        printSuccess(`Mailbox created: ${result.data.id} (${result.data.name})`, opts);
       }
     });
 
@@ -179,8 +179,8 @@ export function registerReceivingCommands(program: Command): void {
       if (opts.json) {
         printJson(result);
       } else {
-        printInfo(`ID:   ${result.id}`, opts);
-        printInfo(`Name: ${result.name}`, opts);
+        printInfo(`ID:   ${result.data.id}`, opts);
+        printInfo(`Name: ${result.data.name}`, opts);
       }
     });
 

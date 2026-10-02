@@ -26,7 +26,7 @@ const creds = { apiKey: 'testapikey' };
 describe('PauboxApiClient receiving', () => {
   describe('listReceivingDomains', () => {
     it('calls GET /receiving/domains', async () => {
-      const domains = [{ id: 1, slug: 'example.com' }];
+      const domains = { data: [{ id: 1, domain: 'example.com' }] };
       const mockFetch = makeFetch(200, domains);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
@@ -58,7 +58,7 @@ describe('PauboxApiClient receiving', () => {
 
   describe('createReceivingDomain', () => {
     it('calls POST /receiving/domains with slug', async () => {
-      const domain = { id: 2, slug: 'test.com' };
+      const domain = { data: { id: 2, domain: 'test.com' } };
       const mockFetch = makeFetch(200, domain);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
@@ -71,21 +71,21 @@ describe('PauboxApiClient receiving', () => {
       expect(JSON.parse(init.body)).toEqual({ slug: 'test.com' });
     });
 
-    it('calls POST without body when slug is omitted', async () => {
-      const domain = { id: 3, slug: 'auto.com' };
+    it('posts an empty JSON object when slug is omitted', async () => {
+      const domain = { data: { id: 3, domain: 'auto.com' } };
       const mockFetch = makeFetch(200, domain);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
       await client.createReceivingDomain();
 
       const [, init] = mockFetch.mock.calls[0];
-      expect(init.body).toBeUndefined();
+      expect(JSON.parse(init.body)).toEqual({});
     });
   });
 
   describe('getReceivingDomain', () => {
     it('calls GET /receiving/domains/:id', async () => {
-      const domain = { id: 5, slug: 'get.com' };
+      const domain = { data: { id: 5, domain: 'get.com' } };
       const mockFetch = makeFetch(200, domain);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
@@ -113,7 +113,7 @@ describe('PauboxApiClient receiving', () => {
 
   describe('listMailboxes', () => {
     it('calls GET /receiving/domains/:domainId/mailboxes', async () => {
-      const mailboxes = [{ id: 1, name: 'info' }];
+      const mailboxes = { data: [{ id: 1, name: 'info' }] };
       const mockFetch = makeFetch(200, mailboxes);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
@@ -128,7 +128,7 @@ describe('PauboxApiClient receiving', () => {
 
   describe('createMailbox', () => {
     it('posts mailbox with name, password, and optional quota', async () => {
-      const mailbox = { id: 10, name: 'support' };
+      const mailbox = { data: { id: 10, name: 'support' } };
       const mockFetch = makeFetch(200, mailbox);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 
@@ -154,7 +154,7 @@ describe('PauboxApiClient receiving', () => {
 
   describe('getMailbox', () => {
     it('calls GET /receiving/domains/:domainId/mailboxes/:id', async () => {
-      const mailbox = { id: 10, name: 'support' };
+      const mailbox = { data: { id: 10, name: 'support' } };
       const mockFetch = makeFetch(200, mailbox);
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
 

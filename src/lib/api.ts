@@ -267,26 +267,25 @@ export class PauboxApiClient {
     return response;
   }
 
-  async listReceivingDomains(): Promise<ReceivingDomain[]> {
+  async listReceivingDomains(): Promise<DataResponse<ReceivingDomain[]>> {
     const response = await this.receivingRequest('/receiving/domains');
-    return response.json() as Promise<ReceivingDomain[]>;
+    return response.json() as Promise<DataResponse<ReceivingDomain[]>>;
   }
 
-  async createReceivingDomain(slug?: string): Promise<ReceivingDomain> {
-    const body = slug !== undefined ? JSON.stringify({ slug }) : undefined;
+  async createReceivingDomain(slug?: string): Promise<DataResponse<ReceivingDomain>> {
     const response = await this.receivingRequest('/receiving/domains', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      ...(body !== undefined ? { body } : {}),
+      body: JSON.stringify(slug !== undefined ? { slug } : {}),
     });
-    return response.json() as Promise<ReceivingDomain>;
+    return response.json() as Promise<DataResponse<ReceivingDomain>>;
   }
 
-  async getReceivingDomain(id: string): Promise<ReceivingDomain> {
+  async getReceivingDomain(id: string): Promise<DataResponse<ReceivingDomain>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(id)}`,
     );
-    return response.json() as Promise<ReceivingDomain>;
+    return response.json() as Promise<DataResponse<ReceivingDomain>>;
   }
 
   async deleteReceivingDomain(id: string): Promise<void> {
@@ -296,17 +295,17 @@ export class PauboxApiClient {
     );
   }
 
-  async listMailboxes(domainId: string): Promise<ReceivingMailbox[]> {
+  async listMailboxes(domainId: string): Promise<DataResponse<ReceivingMailbox[]>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes`,
     );
-    return response.json() as Promise<ReceivingMailbox[]>;
+    return response.json() as Promise<DataResponse<ReceivingMailbox[]>>;
   }
 
   async createMailbox(
     domainId: string,
     options: CreateMailboxOptions,
-  ): Promise<ReceivingMailbox> {
+  ): Promise<DataResponse<ReceivingMailbox>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes`,
       {
@@ -315,14 +314,14 @@ export class PauboxApiClient {
         body: JSON.stringify(options),
       },
     );
-    return response.json() as Promise<ReceivingMailbox>;
+    return response.json() as Promise<DataResponse<ReceivingMailbox>>;
   }
 
-  async getMailbox(domainId: string, mailboxId: string): Promise<ReceivingMailbox> {
+  async getMailbox(domainId: string, mailboxId: string): Promise<DataResponse<ReceivingMailbox>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
     );
-    return response.json() as Promise<ReceivingMailbox>;
+    return response.json() as Promise<DataResponse<ReceivingMailbox>>;
   }
 
   async deleteMailbox(domainId: string, mailboxId: string): Promise<void> {

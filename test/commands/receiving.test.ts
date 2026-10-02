@@ -103,15 +103,18 @@ describe('paubox receiving domains list', () => {
 
   it('prints a table of domains', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
-    MockPauboxApiClient.prototype.listReceivingDomains = jest.fn().mockResolvedValue([
-      { id: 1, slug: 'example.com' },
-      { id: 2, slug: 'test.com' },
-    ]);
+    MockPauboxApiClient.prototype.listReceivingDomains = jest.fn().mockResolvedValue({
+      data: [
+        { id: 1, domain: 'example.com', state: 'active' },
+        { id: 2, domain: 'test.com', state: 'pending' },
+      ],
+    });
     const spy = captureStdout();
 
     await createProgram().parseAsync(['node', 'paubox', 'receiving', 'domains', 'list']);
 
     const output = collectOutput(spy);
+    expect(output).toContain('domain');
     expect(output).toContain('example.com');
     expect(output).toContain('test.com');
     spy.mockRestore();
@@ -119,7 +122,7 @@ describe('paubox receiving domains list', () => {
 
   it('prints message when no domains exist', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
-    MockPauboxApiClient.prototype.listReceivingDomains = jest.fn().mockResolvedValue([]);
+    MockPauboxApiClient.prototype.listReceivingDomains = jest.fn().mockResolvedValue({ data: [] });
     const spy = captureStdout();
 
     await createProgram().parseAsync(['node', 'paubox', 'receiving', 'domains', 'list']);
@@ -130,7 +133,7 @@ describe('paubox receiving domains list', () => {
 
   it('outputs JSON with --json', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
-    const data = [{ id: 1, slug: 'example.com' }];
+    const data = { data: [{ id: 1, domain: 'example.com' }] };
     MockPauboxApiClient.prototype.listReceivingDomains = jest.fn().mockResolvedValue(data);
     const spy = captureStdout();
 
@@ -146,7 +149,7 @@ describe('paubox receiving domains create', () => {
   it('creates a domain with --slug', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.createReceivingDomain = jest.fn().mockResolvedValue({
-      id: 5, slug: 'new.com',
+      data: { id: 5, domain: 'new.com' },
     });
     const spy = captureStdout();
 
@@ -154,7 +157,7 @@ describe('paubox receiving domains create', () => {
       'node', 'paubox', 'receiving', 'domains', 'create', '--slug', 'new.com',
     ]);
 
-    expect(collectOutput(spy)).toContain('new.com');
+    expect(collectOutput(spy)).toContain('Receiving domain created: 5 (new.com)');
     expect(MockPauboxApiClient.prototype.createReceivingDomain).toHaveBeenCalledWith('new.com');
     spy.mockRestore();
   });
@@ -162,7 +165,7 @@ describe('paubox receiving domains create', () => {
   it('creates a domain without --slug', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.createReceivingDomain = jest.fn().mockResolvedValue({
-      id: 6, slug: 'auto.com',
+      data: { id: 6, domain: 'auto.com' },
     });
     const spy = captureStdout();
 
@@ -179,7 +182,7 @@ describe('paubox receiving domains get', () => {
   it('prints domain details', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.getReceivingDomain = jest.fn().mockResolvedValue({
-      id: 1, slug: 'example.com',
+      data: { id: 1, domain: 'example.com' },
     });
     const spy = captureStdout();
 
@@ -188,14 +191,14 @@ describe('paubox receiving domains get', () => {
     ]);
 
     const output = collectOutput(spy);
-    expect(output).toContain('1');
-    expect(output).toContain('example.com');
+    expect(output).toContain('ID:     1');
+    expect(output).toContain('Domain: example.com');
     spy.mockRestore();
   });
 
   it('outputs JSON with --json', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
-    const domain = { id: 1, slug: 'example.com' };
+    const domain = { data: { id: 1, domain: 'example.com' } };
     MockPauboxApiClient.prototype.getReceivingDomain = jest.fn().mockResolvedValue(domain);
     const spy = captureStdout();
 
@@ -227,10 +230,12 @@ describe('paubox receiving domains delete', () => {
 describe('paubox receiving mailboxes list', () => {
   it('prints a table of mailboxes', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
-    MockPauboxApiClient.prototype.listMailboxes = jest.fn().mockResolvedValue([
-      { id: 1, name: 'info' },
-      { id: 2, name: 'support' },
-    ]);
+    MockPauboxApiClient.prototype.listMailboxes = jest.fn().mockResolvedValue({
+      data: [
+        { id: 1, name: 'info' },
+        { id: 2, name: 'support' },
+      ],
+    });
     const spy = captureStdout();
 
     await createProgram().parseAsync([
@@ -246,7 +251,7 @@ describe('paubox receiving mailboxes list', () => {
 
   it('prints message when no mailboxes', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
-    MockPauboxApiClient.prototype.listMailboxes = jest.fn().mockResolvedValue([]);
+    MockPauboxApiClient.prototype.listMailboxes = jest.fn().mockResolvedValue({ data: [] });
     const spy = captureStdout();
 
     await createProgram().parseAsync([
@@ -262,7 +267,7 @@ describe('paubox receiving mailboxes create', () => {
   it('creates a mailbox with required and optional args', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.createMailbox = jest.fn().mockResolvedValue({
-      id: 10, name: 'support',
+      data: { id: 10, name: 'support' },
     });
     const spy = captureStdout();
 
@@ -271,7 +276,7 @@ describe('paubox receiving mailboxes create', () => {
       '--name', 'support', '--password', 'secret', '--quota-bytes', '1073741824',
     ]);
 
-    expect(collectOutput(spy)).toContain('support');
+    expect(collectOutput(spy)).toContain('Mailbox created: 10 (support)');
     expect(MockPauboxApiClient.prototype.createMailbox).toHaveBeenCalledWith('3', {
       name: 'support',
       password: 'secret',
@@ -283,7 +288,7 @@ describe('paubox receiving mailboxes create', () => {
   it('creates a mailbox without optional quota', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.createMailbox = jest.fn().mockResolvedValue({
-      id: 11, name: 'test',
+      data: { id: 11, name: 'test' },
     });
     const spy = captureStdout();
 
@@ -304,7 +309,7 @@ describe('paubox receiving mailboxes get', () => {
   it('prints mailbox details', async () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'k' });
     MockPauboxApiClient.prototype.getMailbox = jest.fn().mockResolvedValue({
-      id: 10, name: 'support',
+      data: { id: 10, name: 'support' },
     });
     const spy = captureStdout();
 
@@ -313,8 +318,8 @@ describe('paubox receiving mailboxes get', () => {
     ]);
 
     const output = collectOutput(spy);
-    expect(output).toContain('10');
-    expect(output).toContain('support');
+    expect(output).toContain('ID:   10');
+    expect(output).toContain('Name: support');
     spy.mockRestore();
   });
 });

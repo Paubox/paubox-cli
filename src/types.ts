@@ -229,7 +229,7 @@ export interface DataResponse<T> {
 
 export interface ReceivingDomain {
   id: number;
-  slug: string;
+  domain: string;
   [key: string]: unknown;
 }
 
