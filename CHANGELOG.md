@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.3.1...paubox-cli-v1.4.0) (2026-10-02)
+
+
+### Features
+
+* **forms:** manage Forms webhook subscriptions ([#58](https://github.com/Paubox/paubox-cli/issues/58)) ([bdbdb3d](https://github.com/Paubox/paubox-cli/commit/bdbdb3d83737efab1282d1810dd88c1bf74ddbfd))
+
 ## [1.3.1](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.3.0...paubox-cli-v1.3.1) (2026-10-02)
 
 
