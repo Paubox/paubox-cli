@@ -37,7 +37,16 @@ function joined(spy: jest.SpyInstance): string {
 }
 
 function run(...args: string[]): Promise<unknown> {
+  return createProgram().parseAsync(['node', 'paubox', 'webhooks', ...args]);
+}
+
+// The deprecated alias delegates to the same implementation.
+function runAlias(...args: string[]): Promise<unknown> {
   return createProgram().parseAsync(['node', 'paubox', 'forms', 'webhooks', ...args]);
+}
+
+function captureStderr(): jest.SpyInstance {
+  return jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
 }
 
 beforeEach(() => {
@@ -49,7 +58,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('paubox forms webhooks list', () => {
+describe('paubox webhooks list', () => {
   const LIST = { data: [SUBSCRIPTION], page_info: { count: 1, items: 50 } };
 
   beforeEach(() => {
@@ -99,19 +108,43 @@ describe('paubox forms webhooks list', () => {
   });
 });
 
-describe('paubox forms webhooks create', () => {
+describe('paubox webhooks create', () => {
   const CREATED = { ...SUBSCRIPTION, signing_secret: 'whsec_abc123' };
 
   beforeEach(() => {
     MockWebhooksApiClient.prototype.createSubscription = jest.fn().mockResolvedValue(CREATED);
   });
 
-  it('defaults to the only event an API key can subscribe to', async () => {
+  it('subscribes to Email API events, not just Forms', async () => {
     captureStdout();
-    await run('create', '--url', 'https://hooks.example.com/paubox');
+    await run(
+      'create',
+      '--url',
+      'https://hooks.example.com/paubox',
+      '--events',
+      'api_mail_log_delivered',
+      'api_mail_log_opened',
+    );
     expect(MockWebhooksApiClient.prototype.createSubscription).toHaveBeenCalledWith({
       target_url: 'https://hooks.example.com/paubox',
-      events: ['forms.submission.created'],
+      events: ['api_mail_log_delivered', 'api_mail_log_opened'],
+    });
+  });
+
+  // The catalog lives in the service, so an unknown name must reach it and come
+  // back as a 422 rather than being refused here.
+  it('does not validate event names locally', async () => {
+    captureStdout();
+    await run(
+      'create',
+      '--url',
+      'https://hooks.example.com/paubox',
+      '--events',
+      'some.future.event',
+    );
+    expect(MockWebhooksApiClient.prototype.createSubscription).toHaveBeenCalledWith({
+      target_url: 'https://hooks.example.com/paubox',
+      events: ['some.future.event'],
     });
   });
 
@@ -132,7 +165,13 @@ describe('paubox forms webhooks create', () => {
 
   it('prints the signing secret and warns that it is shown once', async () => {
     const out = captureStdout();
-    await run('create', '--url', 'https://hooks.example.com/paubox');
+    await run(
+      'create',
+      '--url',
+      'https://hooks.example.com/paubox',
+      '--events',
+      'forms.submission.created',
+    );
     expect(joined(out)).toContain('whsec_abc123');
     expect(joined(out)).toContain('not shown again');
   });
@@ -140,14 +179,15 @@ describe('paubox forms webhooks create', () => {
   it('includes the signing secret in --json output', async () => {
     const out = captureStdout();
     await createProgram().parseAsync([
-      'node', 'paubox', '--json', 'forms', 'webhooks', 'create',
+      'node', 'paubox', '--json', 'webhooks', 'create',
       '--url', 'https://hooks.example.com/paubox',
+      '--events', 'forms.submission.created',
     ]);
     expect(JSON.parse(joined(out))).toEqual(CREATED);
   });
 });
 
-describe('paubox forms webhooks get', () => {
+describe('paubox webhooks get', () => {
   beforeEach(() => {
     MockWebhooksApiClient.prototype.getSubscription = jest.fn().mockResolvedValue(SUBSCRIPTION);
   });
@@ -160,7 +200,7 @@ describe('paubox forms webhooks get', () => {
   });
 });
 
-describe('paubox forms webhooks update', () => {
+describe('paubox webhooks update', () => {
   beforeEach(() => {
     MockWebhooksApiClient.prototype.updateSubscription = jest
       .fn()
@@ -196,7 +236,7 @@ describe('paubox forms webhooks update', () => {
   });
 });
 
-describe('paubox forms webhooks delete', () => {
+describe('paubox webhooks delete', () => {
   beforeEach(() => {
     MockWebhooksApiClient.prototype.deleteSubscription = jest.fn().mockResolvedValue(undefined);
   });
@@ -214,5 +254,82 @@ describe('paubox forms webhooks delete', () => {
       'node', 'paubox', '--json', 'forms', 'webhooks', 'delete', ID,
     ]);
     expect(JSON.parse(joined(out))).toEqual({ status: 'ok', subscriptionId: ID });
+  });
+});
+
+describe('paubox forms webhooks (deprecated alias)', () => {
+  const LIST = { data: [SUBSCRIPTION], page_info: { count: 1, items: 50 } };
+
+  beforeEach(() => {
+    MockWebhooksApiClient.prototype.listSubscriptions = jest.fn().mockResolvedValue(LIST);
+  });
+
+  it('still works, so scripts written against 1.4.0 keep running', async () => {
+    captureStdout();
+    captureStderr();
+    await runAlias('list');
+    expect(MockWebhooksApiClient.prototype.listSubscriptions).toHaveBeenCalled();
+  });
+
+  // On stderr, so a `--json` consumer parsing stdout is unaffected.
+  it('warns on stderr and points at the merged command', async () => {
+    captureStdout();
+    const err = captureStderr();
+    await runAlias('list');
+    expect(joined(err)).toContain('deprecated');
+    expect(joined(err)).toContain('paubox webhooks');
+  });
+
+  it('keeps the warning out of stdout', async () => {
+    const out = captureStdout();
+    captureStderr();
+    await runAlias('list');
+    expect(joined(out)).not.toContain('deprecated');
+  });
+
+  it('is silent under --quiet', async () => {
+    captureStdout();
+    const err = captureStderr();
+    await createProgram().parseAsync([
+      'node', 'paubox', '--quiet', 'forms', 'webhooks', 'list',
+    ]);
+    expect(joined(err)).not.toContain('deprecated');
+  });
+
+  it('does not warn on the canonical command', async () => {
+    captureStdout();
+    const err = captureStderr();
+    await run('list');
+    expect(joined(err)).not.toContain('deprecated');
+  });
+});
+
+describe('webhook credentials', () => {
+  const LIST = { data: [], page_info: { count: 0, items: 50 } };
+
+  beforeEach(() => {
+    MockWebhooksApiClient.prototype.listSubscriptions = jest.fn().mockResolvedValue(LIST);
+  });
+
+  // Both keys reach this service now; scope decides which events each may
+  // manage, so an Email-API-only install is no longer locked out.
+  it('falls back to the Email API key when no Forms key is stored', async () => {
+    mockLoadCredentials.mockResolvedValue({ apiKey: 'email-key-999' });
+    captureStdout();
+    await run('list');
+    expect(MockWebhooksApiClient).toHaveBeenCalledWith(undefined, 'email-key-999');
+  });
+
+  it('prefers the Forms key when both are stored', async () => {
+    mockLoadCredentials.mockResolvedValue({ apiKey: 'email-key', formsApiKey: 'forms-key' });
+    captureStdout();
+    await run('list');
+    expect(MockWebhooksApiClient).toHaveBeenCalledWith(undefined, 'forms-key');
+  });
+
+  it('refuses when neither key is stored', async () => {
+    mockLoadCredentials.mockResolvedValue(null);
+    captureStdout();
+    await expect(run('list')).rejects.toThrow(/Not authenticated/);
   });
 });
