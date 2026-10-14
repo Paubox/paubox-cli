@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.4.0...paubox-cli-v2.0.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* merge the two webhook commands into `paubox webhooks` ([#60](https://github.com/Paubox/paubox-cli/issues/60))
+
+### Features
+
+* merge the two webhook commands into `paubox webhooks` ([#60](https://github.com/Paubox/paubox-cli/issues/60)) ([5ca6268](https://github.com/Paubox/paubox-cli/commit/5ca6268b2105d64304de61153ae48a852012af9b))
+
 ## [1.4.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.3.1...paubox-cli-v1.4.0) (2026-10-02)
 
 
