@@ -14,10 +14,25 @@ import type {
 // producers post to is deliberately not reachable from this host.
 export const DEFAULT_WEBHOOKS_BASE_URL = 'https://api.paubox.com/v1/webhooks';
 
-// The only event an API key can subscribe to today. The webhooks service maps
-// the `forms` scope and nothing else, so an Email API event is refused with a
-// 403 no matter which key is used.
-export const FORMS_EVENTS = ['forms.submission.created'] as const;
+/**
+ * The events the service catalogues, for help text and error hints only.
+ *
+ * Deliberately not used to validate `--events`: the catalog lives in the
+ * service and can grow without a CLI release, so an unrecognised name should
+ * come back as the service's 422 rather than be refused here.
+ *
+ * The four Email API events keep their legacy `api_mail_log_` names so that
+ * receivers written against the retired Email API webhooks keep working. Those
+ * are the names on the wire — `delivered` or `failed` alone are rejected.
+ */
+export const WEBHOOK_EVENTS = [
+  'forms.submission.created',
+  'api_mail_log_delivered',
+  'api_mail_log_opened',
+  'api_mail_log_temporary_failure',
+  'api_mail_log_permanent_failure',
+  'email.inbound.received',
+] as const;
 
 // Same reasoning as the Forms client: the API key travels to whatever this
 // resolves to, so the override is limited to http(s) origins as a guard against
@@ -190,7 +205,7 @@ export class WebhooksApiClient {
       throw new ApiError(
         `Forbidden (403): ${message}`,
         403,
-        `An API key can only manage subscriptions to: ${FORMS_EVENTS.join(', ')}.`,
+        `Your key is not scoped for one of the requested events. Known events: ${WEBHOOK_EVENTS.join(', ')}.`,
       );
     }
     if (response.status === 404) {

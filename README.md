@@ -322,20 +322,37 @@ paubox forms update <formId> --title "Renamed form" --active false
 | `--subscription-list-id <id>` | New subscription list ID |
 | `--form-json-file <path>` | Path to a JSON file with the new form definition |
 
-##### `forms webhooks`
+### `paubox webhooks`
 
-Subscribe a URL of yours to Forms events, so Paubox posts to it when a submission comes in instead of you polling `forms submissions`.
+Subscribe a URL of yours to Paubox events, so Paubox posts to it when something happens instead of you polling.
+
+Which events your key may subscribe to follows from its scopes. A Forms-scoped key manages `forms.submission.created`; an Email API key manages the four delivery events. Asking for an event your key is not scoped for returns a 403 naming it, and an unrecognised name returns a 422 — the catalog lives in the service, not in this CLI.
+
+| Event | Fires when |
+|-------|------------|
+| `forms.submission.created` | A form submission is received |
+| `api_mail_log_delivered` | An Email API message is delivered |
+| `api_mail_log_opened` | A delivered message is opened |
+| `api_mail_log_temporary_failure` | Delivery fails temporarily |
+| `api_mail_log_permanent_failure` | Delivery fails permanently |
+| `email.inbound.received` | Inbound mail is received |
+
+The four Email API events keep their legacy `api_mail_log_` names so receivers written against the old Email API webhooks keep working. These are the names on the wire: `delivered` or `failed` on their own are rejected as unknown.
 
 Deliveries are signed with a secret returned once, at creation. `--url` must be an `https` URL that resolves to a publicly routable address.
 
 ```bash
-# Subscribe to forms.submission.created (the default)
-paubox forms webhooks create --url https://hooks.yourdomain.com/paubox
+paubox webhooks create --url https://hooks.yourdomain.com/paubox \
+  --events forms.submission.created
 
-paubox forms webhooks list
-paubox forms webhooks get <subscriptionId>
-paubox forms webhooks update <subscriptionId> --status disabled
-paubox forms webhooks delete <subscriptionId>
+# Email API delivery events, with an Email API key
+paubox webhooks create --url https://hooks.yourdomain.com/mail \
+  --events api_mail_log_delivered api_mail_log_permanent_failure
+
+paubox webhooks list
+paubox webhooks get <subscriptionId>
+paubox webhooks update <subscriptionId> --status disabled
+paubox webhooks delete <subscriptionId>
 ```
 
 `create` prints the signing secret:
@@ -355,16 +372,16 @@ Use `--json` on `create` if you need to capture the secret programmatically; the
 | `list` | `--page <n>` | Page number (default 1) |
 | `list` | `--items <n>` | Items per page (default 50, max 200) |
 | `create` | `--url <url>` | **Required.** Delivery target; must be an `https` URL |
-| `create` | `--events <events...>` | Events to subscribe to (default `forms.submission.created`) |
+| `create` | `--events <events...>` | **Required.** Events to subscribe to |
 | `update` | `--url <url>` | New delivery target |
 | `update` | `--events <events...>` | Replace the subscribed events |
 | `update` | `--status <active\|disabled>` | Pause or resume deliveries |
 
 Subscription IDs are UUIDs, as printed by `list`.
 
-An API key can only manage Forms subscriptions. Email API events exist on the same service but are console-only, so asking for one returns a 403 naming the event.
+The command uses your stored Forms API key when there is one, falling back to the Email API key.
 
----
+> **Moved in 2.0.0.** This was `paubox forms webhooks`, nested there because an API key could only manage Forms subscriptions. Since the Email API webhook cutover, one key type reaches every event it is scoped for, so the nesting implied a limit that no longer exists. `paubox forms webhooks` still works and prints a deprecation notice.
 
 ### `paubox config`
 
@@ -406,14 +423,14 @@ paubox --json send --to to@example.com --from from@example.com --subject Hi --te
 | Variable | Description |
 |----------|-------------|
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
-| `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox forms webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
+| `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
 
 These point the `paubox forms` commands at a non-production environment without
 patching and rebuilding:
 
 ```bash
 PAUBOX_FORMS_URL=https://api.staging.paubox.net/forms paubox forms list
-PAUBOX_WEBHOOKS_URL=https://api.staging.paubox.net/v1/webhooks paubox forms webhooks list
+PAUBOX_WEBHOOKS_URL=https://api.staging.paubox.net/v1/webhooks paubox webhooks list
 ```
 
 Your Forms API key is sent to whatever host these resolve to, so only point them at

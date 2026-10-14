@@ -311,25 +311,8 @@ export interface CreateMailboxOptions {
   quota_bytes?: number;
 }
 
-export interface WebhookEndpoint {
-  id: number;
-  target_url: string;
-  events: string[];
-  active: boolean;
-  signing_key: string | null;
-  api_key: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WebhookEndpointResponse {
-  message: string;
-  data: WebhookEndpoint;
-}
-
-// The webhooks service calls these endpoints; `WebhookEndpoint` above is the
-// Email API's unrelated resource of the same name, so these carry the
-// subscription wording the `forms webhooks` commands use.
+// A subscription on the webhooks service: which URL Paubox notifies, and for
+// which events.
 export interface WebhookSubscription {
   id: string;
   target_url: string;
