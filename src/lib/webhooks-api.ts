@@ -1,4 +1,6 @@
-import { ApiError, AuthError, ConfigError } from './errors';
+import { AuthError, ConfigError } from './errors';
+import { HttpClient } from './http';
+import type { FetchFn } from './http';
 import type {
   CreateWebhookSubscriptionBody,
   CreatedWebhookSubscription,
@@ -78,17 +80,37 @@ function sanitizeId(value: string): string {
   return encodeURIComponent(value);
 }
 
-type FetchFn = typeof fetch;
+const NOT_FOUND_HINT =
+  'Run `paubox webhooks list` to see the subscriptions on this account.';
+
+const VALIDATION_HINT =
+  'target_url must be an https URL that resolves to a public address, and every ' +
+  `event must be one your key is scoped for. Known events: ${WEBHOOK_EVENTS.join(', ')}.`;
 
 export class WebhooksApiClient {
-  private readonly fetchFn: FetchFn;
   private readonly apiKey: string | null;
   private readonly baseUrl: string;
+  private readonly http: HttpClient;
 
   constructor(fetchFn?: FetchFn, apiKey?: string | null, baseUrl?: string) {
-    this.fetchFn = fetchFn ?? globalThis.fetch;
     this.apiKey = apiKey ?? null;
     this.baseUrl = baseUrl ?? resolveWebhooksBaseUrl();
+    this.http = new HttpClient({
+      service: 'webhooks',
+      fetchFn,
+      authHeaders: () => this.authHeaders(),
+    });
+  }
+
+  private webhooksRequest(
+    url: string,
+    init: RequestInit | undefined,
+    operation: string,
+  ): Promise<Response> {
+    return this.http.request(url, init ?? {}, {
+      operation,
+      hints: { 404: NOT_FOUND_HINT, 422: VALIDATION_HINT },
+    });
   }
 
   async listSubscriptions(
@@ -100,21 +122,13 @@ export class WebhooksApiClient {
 
     const qs = query.toString();
     const url = `${this.baseUrl}/endpoints${qs ? `?${qs}` : ''}`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.webhooksRequest(url, undefined, 'List webhook subscriptions');
     return response.json() as Promise<WebhookSubscriptionListResponse>;
   }
 
   async getSubscription(id: string): Promise<WebhookSubscription> {
     const url = `${this.baseUrl}/endpoints/${sanitizeId(id)}`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.webhooksRequest(url, undefined, 'Get webhook subscription');
     const body = (await response.json()) as WebhookSubscriptionResponse;
     return body.data;
   }
@@ -125,15 +139,11 @@ export class WebhooksApiClient {
     body: CreateWebhookSubscriptionBody,
   ): Promise<CreatedWebhookSubscription> {
     const url = `${this.baseUrl}/endpoints`;
-    const response = await this.fetchFn(url, {
-      method: 'POST',
-      headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.webhooksRequest(
+      url,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      'Create webhook subscription',
+    );
     const parsed = (await response.json()) as CreatedWebhookSubscriptionResponse;
     return parsed.data;
   }
@@ -143,85 +153,24 @@ export class WebhooksApiClient {
     changes: UpdateWebhookSubscriptionBody,
   ): Promise<WebhookSubscription> {
     const url = `${this.baseUrl}/endpoints/${sanitizeId(id)}`;
-    const response = await this.fetchFn(url, {
-      method: 'PATCH',
-      headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(changes),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.webhooksRequest(
+      url,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) },
+      'Update webhook subscription',
+    );
     const body = (await response.json()) as WebhookSubscriptionResponse;
     return body.data;
   }
 
   async deleteSubscription(id: string): Promise<void> {
     const url = `${this.baseUrl}/endpoints/${sanitizeId(id)}`;
-    const response = await this.fetchFn(url, {
-      method: 'DELETE',
-      headers: this.authHeaders(),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    await this.webhooksRequest(url, { method: 'DELETE' }, 'Delete webhook subscription');
   }
 
   private authHeaders(): Record<string, string> {
     if (!this.apiKey) {
-      throw new AuthError(
-        'No Forms API key configured.',
-        'Run `paubox auth set-forms-key` with a scoped API key that has the "forms" scope.',
-      );
+      throw AuthError.missing('forms');
     }
     return { Authorization: `Bearer ${this.apiKey}` };
-  }
-
-  // Errors arrive as {"message": "..."}; the raw body is the fallback so an
-  // unexpected shape still reaches the user instead of becoming "undefined".
-  private async errorMessage(response: Response): Promise<string> {
-    const body = await response.text();
-    try {
-      const parsed = JSON.parse(body) as { message?: unknown };
-      if (typeof parsed.message === 'string') return parsed.message;
-    } catch {
-      // fall through
-    }
-    return body;
-  }
-
-  private async handleError(response: Response): Promise<never> {
-    if (response.status === 401) {
-      throw new AuthError(
-        'Forms API key is invalid or lacks the "forms" scope.',
-        'Run `paubox auth set-forms-key` with a scoped API key that has the "forms" scope.',
-      );
-    }
-
-    const message = await this.errorMessage(response);
-
-    if (response.status === 403) {
-      throw new ApiError(
-        `Forbidden (403): ${message}`,
-        403,
-        `Your key is not scoped for one of the requested events. Known events: ${WEBHOOK_EVENTS.join(', ')}.`,
-      );
-    }
-    if (response.status === 404) {
-      throw new ApiError(
-        'Webhook subscription not found.',
-        404,
-        'Run `paubox forms webhooks list` to see the subscriptions on this account.',
-      );
-    }
-    if (response.status === 422) {
-      throw new ApiError(
-        `Validation failed: ${message}`,
-        422,
-        'target_url must be an https URL resolving to a public address, and every event must be one you are scoped for.',
-      );
-    }
-    throw new ApiError(`Request failed (${response.status}): ${message}`, response.status);
   }
 }

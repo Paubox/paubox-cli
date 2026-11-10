@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ApiError, AuthError } from './errors';
+import { AuthError, ValidationError } from './errors';
+import { HttpClient } from './http';
+import type { FetchFn } from './http';
 import type {
   AttachmentOption,
   CreateMailboxOptions,
@@ -55,9 +57,23 @@ function getMimeType(filePath: string): string {
 }
 
 export function resolveAttachments(filePaths: string[]): AttachmentOption[] {
+  const missing = filePaths.filter((filePath) => !fs.existsSync(filePath));
+  if (missing.length > 0) {
+    throw new ValidationError(
+      missing.length === 1
+        ? `Attachment not found: ${missing[0]}`
+        : `${missing.length} attachments not found.`,
+      'Check the paths passed to --attachment. Nothing was sent.',
+      missing.map((filePath) => `--attachment: ${filePath} does not exist`),
+    );
+  }
+
   return filePaths.map((filePath) => {
-    if (!fs.existsSync(filePath)) {
-      throw new ApiError(`Attachment not found: ${filePath}`);
+    if (fs.statSync(filePath).isDirectory()) {
+      throw new ValidationError(
+        `Attachment is a directory: ${filePath}`,
+        'Pass a file to --attachment, not a directory.',
+      );
     }
     return {
       fileName: path.basename(filePath),
@@ -88,200 +104,145 @@ function buildPayload(options: SendEmailOptions): PauboxMessagePayload {
   };
 }
 
-type FetchFn = typeof fetch;
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export class PauboxApiClient {
   private readonly baseUrl: string;
-  private readonly fetchFn: FetchFn;
+  private readonly http: HttpClient;
 
   constructor(private readonly credentials: PauboxCredentials, fetchFn?: FetchFn) {
     this.baseUrl = 'https://api.paubox.com/v1/email';
-    this.fetchFn = fetchFn ?? globalThis.fetch;
+    this.http = new HttpClient({
+      service: 'email',
+      fetchFn,
+      authHeaders: () => this.authHeaders(),
+    });
   }
 
-  private authHeader(): string {
-    return `Token token=${this.credentials.apiKey}`;
+  /**
+   * `auth set-forms-key` can store an empty `apiKey`, so an absent Email API key
+   * is a normal state rather than a corrupt one — catch it here with the right
+   * remedy instead of sending `Token token=` and reading back a bare 401.
+   */
+  private authHeaders(): Record<string, string> {
+    if (!this.credentials.apiKey) {
+      throw AuthError.missing('email');
+    }
+    return { Authorization: `Token token=${this.credentials.apiKey}` };
   }
 
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResponse> {
-    const payload = buildPayload(options);
-    const response = await this.fetchFn(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: this.authHeader(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError(
-          'Authentication failed.',
-          'Check your API credentials with `paubox auth status` or re-run `paubox auth login`.',
-        );
-      }
-      const body = await response.text();
-      throw new ApiError(`Send failed (${response.status}): ${body}`, response.status);
-    }
-
+    const response = await this.http.request(
+      `${this.baseUrl}/messages`,
+      { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(buildPayload(options)) },
+      { operation: 'Send email' },
+    );
     return response.json() as Promise<SendEmailResponse>;
   }
 
   async getMessageStatus(sourceTrackingId: string): Promise<MessageStatusResponse> {
-    const url = `${this.baseUrl}/message_receipt?sourceTrackingId=${encodeURIComponent(sourceTrackingId)}`;
-    const response = await this.fetchFn(url, {
-      headers: { Authorization: this.authHeader() },
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError('Authentication failed.');
-      }
-      const body = await response.text();
-      throw new ApiError(`Status check failed (${response.status}): ${body}`, response.status);
-    }
-
+    const response = await this.http.request(
+      `${this.baseUrl}/message_receipt?sourceTrackingId=${encodeURIComponent(sourceTrackingId)}`,
+      {},
+      {
+        operation: 'Status check',
+        hints: {
+          404: 'No message with that tracking ID. Check the value returned by `paubox send`.',
+        },
+      },
+    );
     return response.json() as Promise<MessageStatusResponse>;
   }
 
   async scheduleEmail(options: ScheduleEmailOptions): Promise<ScheduleEmailResponse> {
     const payload = buildPayload(options);
-    const response = await this.fetchFn(`${this.baseUrl}/schedule`, {
-      method: 'POST',
-      headers: {
-        Authorization: this.authHeader(),
-        'Content-Type': 'application/json',
+    const response = await this.http.request(
+      `${this.baseUrl}/schedule`,
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ data: { ...payload.data, scheduled_at: options.scheduledAt } }),
       },
-      body: JSON.stringify({
-        data: {
-          ...payload.data,
-          scheduled_at: options.scheduledAt,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError(
-          'Authentication failed.',
-          'Check your API credentials with `paubox auth status` or re-run `paubox auth login`.',
-        );
-      }
-      const body = await response.text();
-      throw new ApiError(`Schedule failed (${response.status}): ${body}`, response.status);
-    }
-
+      { operation: 'Schedule email' },
+    );
     return response.json() as Promise<ScheduleEmailResponse>;
   }
 
   async getScheduledMessage(sourceTrackingId: string): Promise<ScheduledMessageResponse> {
-    const response = await this.fetchFn(
+    const response = await this.http.request(
       `${this.baseUrl}/schedule/${encodeURIComponent(sourceTrackingId)}`,
-      { headers: { Authorization: this.authHeader() } },
+      {},
+      {
+        operation: 'Get scheduled message',
+        hints: { 404: 'No scheduled message with that tracking ID — it may have already been sent or cancelled.' },
+      },
     );
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError('Authentication failed.');
-      }
-      const body = await response.text();
-      throw new ApiError(`Get scheduled message failed (${response.status}): ${body}`, response.status);
-    }
-
     return response.json() as Promise<ScheduledMessageResponse>;
   }
 
-  async rescheduleMessage(sourceTrackingId: string, scheduledAt: string): Promise<ScheduledMessageResponse> {
-    const response = await this.fetchFn(
+  async rescheduleMessage(
+    sourceTrackingId: string,
+    scheduledAt: string,
+  ): Promise<ScheduledMessageResponse> {
+    const response = await this.http.request(
       `${this.baseUrl}/schedule/${encodeURIComponent(sourceTrackingId)}`,
+      { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ scheduled_at: scheduledAt }) },
       {
-        method: 'PATCH',
-        headers: {
-          Authorization: this.authHeader(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ scheduled_at: scheduledAt }),
+        operation: 'Reschedule message',
+        hints: { 404: 'No scheduled message with that tracking ID — it may have already been sent or cancelled.' },
       },
     );
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError('Authentication failed.');
-      }
-      const body = await response.text();
-      throw new ApiError(`Reschedule failed (${response.status}): ${body}`, response.status);
-    }
-
     return response.json() as Promise<ScheduledMessageResponse>;
   }
 
   async cancelScheduledMessage(sourceTrackingId: string): Promise<ScheduledMessageResponse> {
-    const response = await this.fetchFn(
+    const response = await this.http.request(
       `${this.baseUrl}/schedule/${encodeURIComponent(sourceTrackingId)}/cancel`,
+      { method: 'POST' },
       {
-        method: 'POST',
-        headers: { Authorization: this.authHeader() },
+        operation: 'Cancel scheduled message',
+        hints: { 404: 'No scheduled message with that tracking ID — it may have already been sent or cancelled.' },
       },
     );
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError('Authentication failed.');
-      }
-      const body = await response.text();
-      throw new ApiError(`Cancel failed (${response.status}): ${body}`, response.status);
-    }
-
     return response.json() as Promise<ScheduledMessageResponse>;
   }
 
-  private async receivingRequest(
+  private receivingRequest(
     path: string,
-    init?: RequestInit,
+    init: RequestInit | undefined,
+    operation: string,
     notFoundSuggestion?: string,
   ): Promise<Response> {
-    const response = await this.fetchFn(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        Authorization: this.authHeader(),
-        ...(init?.headers ?? {}),
-      },
+    return this.http.request(`${this.baseUrl}${path}`, init ?? {}, {
+      operation,
+      ...(notFoundSuggestion ? { hints: { 404: notFoundSuggestion } } : {}),
     });
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new AuthError(
-          'Authentication failed.',
-          'Check your API credentials with `paubox auth status` or re-run `paubox auth login`.',
-        );
-      }
-      const body = await response.text();
-      throw new ApiError(
-        `Request failed (${response.status}): ${body}`,
-        response.status,
-        response.status === 404 ? notFoundSuggestion : undefined,
-      );
-    }
-    return response;
   }
 
   async listReceivingDomains(): Promise<DataResponse<ReceivingDomain[]>> {
-    const response = await this.receivingRequest('/receiving/domains');
+    const response = await this.receivingRequest('/receiving/domains', undefined, 'List receiving domains');
     return response.json() as Promise<DataResponse<ReceivingDomain[]>>;
   }
 
   async createReceivingDomain(slug?: string): Promise<DataResponse<ReceivingDomain>> {
-    const response = await this.receivingRequest('/receiving/domains', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(slug !== undefined ? { slug } : {}),
-    });
+    const response = await this.receivingRequest(
+      '/receiving/domains',
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(slug !== undefined ? { slug } : {}),
+      },
+      'Create receiving domain',
+    );
     return response.json() as Promise<DataResponse<ReceivingDomain>>;
   }
 
   async getReceivingDomain(id: string): Promise<DataResponse<ReceivingDomain>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(id)}`,
+      undefined,
+      'Get receiving domain',
+      'Run `paubox receiving domains list` to see the domains on this account.',
     );
     return response.json() as Promise<DataResponse<ReceivingDomain>>;
   }
@@ -290,12 +251,17 @@ export class PauboxApiClient {
     await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(id)}`,
       { method: 'DELETE' },
+      'Delete receiving domain',
+      'Run `paubox receiving domains list` to see the domains on this account.',
     );
   }
 
   async listMailboxes(domainId: string): Promise<DataResponse<ReceivingMailbox[]>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes`,
+      undefined,
+      'List mailboxes',
+      'Run `paubox receiving domains list` to check the domain ID.',
     );
     return response.json() as Promise<DataResponse<ReceivingMailbox[]>>;
   }
@@ -306,11 +272,9 @@ export class PauboxApiClient {
   ): Promise<DataResponse<ReceivingMailbox>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(options),
-      },
+      { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(options) },
+      'Create mailbox',
+      'Run `paubox receiving domains list` to check the domain ID.',
     );
     return response.json() as Promise<DataResponse<ReceivingMailbox>>;
   }
@@ -318,6 +282,9 @@ export class PauboxApiClient {
   async getMailbox(domainId: string, mailboxId: string): Promise<DataResponse<ReceivingMailbox>> {
     const response = await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
+      undefined,
+      'Get mailbox',
+      'Run `paubox receiving mailboxes list <domainId>` to see the mailboxes on this domain.',
     );
     return response.json() as Promise<DataResponse<ReceivingMailbox>>;
   }
@@ -326,6 +293,8 @@ export class PauboxApiClient {
     await this.receivingRequest(
       `/receiving/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
       { method: 'DELETE' },
+      'Delete mailbox',
+      'Run `paubox receiving mailboxes list <domainId>` to see the mailboxes on this domain.',
     );
   }
 
@@ -335,7 +304,11 @@ export class PauboxApiClient {
     if (params?.after !== undefined) query.set('after', params.after);
     if (params?.before !== undefined) query.set('before', params.before);
     const qs = query.toString();
-    const response = await this.receivingRequest(`/receiving${qs ? `?${qs}` : ''}`);
+    const response = await this.receivingRequest(
+      `/receiving${qs ? `?${qs}` : ''}`,
+      undefined,
+      'List received emails',
+    );
     return response.json() as Promise<ReceivedEmailList>;
   }
 
@@ -343,6 +316,7 @@ export class PauboxApiClient {
     const response = await this.receivingRequest(
       `/receiving/${encodeURIComponent(emailId)}`,
       undefined,
+      'Get received email',
       STALE_EMAIL_ID_HINT,
     );
     return response.json() as Promise<DataResponse<ReceivedEmail>>;
@@ -352,6 +326,7 @@ export class PauboxApiClient {
     const response = await this.receivingRequest(
       `/receiving/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(attachmentId)}`,
       undefined,
+      'Download attachment',
       STALE_ATTACHMENT_ID_HINT,
     );
     return {
@@ -361,17 +336,28 @@ export class PauboxApiClient {
     };
   }
 
+  /**
+   * Probe whether the stored Email API key authenticates.
+   *
+   * GET /messages is not a routed method, so it 404s for any key, valid or not.
+   * message_receipt does authenticate, so it is the only cheap 401 probe we
+   * have. Deliberately bypasses HttpClient: a 404 here is the success case, and
+   * a transport failure must read as "could not check" rather than "invalid".
+   */
   async validateCredentials(): Promise<boolean> {
     try {
-      // GET /messages is not a routed method, so it 404s for any key, valid or not.
-      // message_receipt does authenticate, so it is the only cheap 401 probe we have.
-      const response = await this.fetchFn(
+      const response = await this.http.request(
         `${this.baseUrl}/message_receipt?sourceTrackingId=credential-check`,
-        { headers: { Authorization: this.authHeader() } },
+        {},
+        { operation: 'Credential check' },
       );
       return response.status !== 401;
-    } catch {
-      return false;
+    } catch (err) {
+      if (err instanceof AuthError) return false;
+      // A 404 is the expected shape of a *successful* probe.
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 404) return true;
+      throw err;
     }
   }
 }

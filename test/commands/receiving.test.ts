@@ -98,7 +98,7 @@ describe('paubox receiving domains list', () => {
     mockCredentials.loadCredentials.mockResolvedValue(null);
     await expect(
       createProgram().parseAsync(['node', 'paubox', 'receiving', 'domains', 'list']),
-    ).rejects.toThrow('Not authenticated.');
+    ).rejects.toThrow(/No Paubox API key is stored/);
   });
 
   it('prints a table of domains', async () => {

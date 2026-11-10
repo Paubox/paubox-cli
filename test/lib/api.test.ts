@@ -1,5 +1,6 @@
 import { PauboxApiClient, resolveAttachments } from '../../src/lib/api';
-import { ApiError, AuthError } from '../../src/lib/errors';
+import { ApiError, AuthError, NetworkError, ValidationError } from '../../src/lib/errors';
+import { transportFailure } from '../helpers/fake-response';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -144,10 +145,12 @@ describe('PauboxApiClient', () => {
       expect(await client.validateCredentials()).toBe(false);
     });
 
-    it('returns false on network error', async () => {
-      const mockFetch = jest.fn().mockRejectedValue(new Error('Network error'));
+    // A network failure is not evidence the key is bad. Reporting it as
+    // "credentials are invalid" is what sent users to rotate a working key.
+    it('surfaces a network failure instead of calling the key invalid', async () => {
+      const mockFetch = jest.fn().mockRejectedValue(transportFailure('ENOTFOUND'));
       const client = new PauboxApiClient(creds, mockFetch as unknown as typeof fetch);
-      expect(await client.validateCredentials()).toBe(false);
+      await expect(client.validateCredentials()).rejects.toThrow(NetworkError);
     });
   });
 });
@@ -179,7 +182,16 @@ describe('resolveAttachments', () => {
     expect(att.contentType).toBe('application/pdf');
   });
 
-  it('throws ApiError for missing file', () => {
-    expect(() => resolveAttachments(['/nonexistent/file.txt'])).toThrow(ApiError);
+  it('throws a validation error naming the missing file', () => {
+    expect(() => resolveAttachments(['/nonexistent/file.txt'])).toThrow(ValidationError);
+    expect(() => resolveAttachments(['/nonexistent/file.txt'])).toThrow(
+      'Attachment not found: /nonexistent/file.txt',
+    );
+  });
+
+  it('lists every missing file in one pass', () => {
+    expect(() => resolveAttachments(['/no/a.txt', '/no/b.txt'])).toThrow(
+      '2 attachments not found.',
+    );
   });
 });

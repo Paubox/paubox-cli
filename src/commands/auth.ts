@@ -2,7 +2,7 @@ import { password } from '@inquirer/prompts';
 import type { Command } from 'commander';
 import { PauboxApiClient } from '../lib/api';
 import * as credentials from '../lib/credentials';
-import { AuthError } from '../lib/errors';
+import { AuthError, PauboxError } from '../lib/errors';
 import { printInfo, printJson, printSuccess } from '../lib/output';
 import type { OutputOptions } from '../types';
 
@@ -27,10 +27,7 @@ export function registerAuthCommands(program: Command): void {
         const client = new PauboxApiClient({ apiKey: apiKey.trim() });
         const valid = await client.validateCredentials();
         if (!valid) {
-          throw new AuthError(
-            'Credentials are invalid.',
-            'Check your API key in the Paubox dashboard.',
-          );
+          throw AuthError.invalid('email');
         }
 
         const existing = await credentials.loadCredentials();
@@ -47,7 +44,10 @@ export function registerAuthCommands(program: Command): void {
           printSuccess(`Authenticated (API key: ${masked}, stored in ${storage})`, opts);
         }
       } catch (err) {
-        if (err instanceof AuthError) throw err;
+        // Only an unrecognised failure becomes an AuthError. Flattening a
+        // NetworkError into "credentials are invalid" is how a DNS outage used
+        // to read as a bad API key.
+        if (err instanceof PauboxError) throw err;
         throw new AuthError(String(err));
       }
     });
@@ -83,7 +83,10 @@ export function registerAuthCommands(program: Command): void {
           printSuccess(`Forms API key saved (${masked}, stored in ${storage})`, opts);
         }
       } catch (err) {
-        if (err instanceof AuthError) throw err;
+        // Only an unrecognised failure becomes an AuthError. Flattening a
+        // NetworkError into "credentials are invalid" is how a DNS outage used
+        // to read as a bad API key.
+        if (err instanceof PauboxError) throw err;
         throw new AuthError(String(err));
       }
     });

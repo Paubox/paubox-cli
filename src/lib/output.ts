@@ -28,11 +28,40 @@ export function printWarning(message: string, opts?: OutputOptions): void {
   process.stderr.write(chalk.yellow('! ') + message + '\n');
 }
 
-export function printError(message: string, suggestion?: string): void {
+export interface ErrorDetails {
+  suggestion?: string;
+  /** One line per failed field, listed under the headline. */
+  problems?: string[];
+  /**
+   * Printed so a user filing a ticket can hand support the one string that
+   * finds the request in the Paubox-side logs.
+   */
+  requestId?: string;
+}
+
+export function printError(message: string, details: ErrorDetails = {}): void {
   process.stderr.write(chalk.red('✗ ') + message + '\n');
-  if (suggestion) {
-    process.stderr.write(chalk.dim('  Hint: ') + suggestion + '\n');
+  // A single problem is already the headline; only list them when there are several.
+  const problems = details.problems ?? [];
+  if (problems.length > 1) {
+    for (const problem of problems) {
+      process.stderr.write(chalk.red('  • ') + problem + '\n');
+    }
   }
+  if (details.suggestion) {
+    process.stderr.write(chalk.dim('  Hint: ') + details.suggestion + '\n');
+  }
+  if (details.requestId) {
+    process.stderr.write(chalk.dim(`  Request ID: ${details.requestId}`) + '\n');
+  }
+}
+
+/**
+ * Errors go to stderr even under --json, so a script reading stdout for results
+ * keeps parsing cleanly while still being able to capture a structured failure.
+ */
+export function printErrorJson(payload: unknown): void {
+  process.stderr.write(JSON.stringify(payload, null, 2) + '\n');
 }
 
 export function printTable(rows: Record<string, string>[]): void {

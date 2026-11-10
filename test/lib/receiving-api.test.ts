@@ -245,7 +245,7 @@ describe('PauboxApiClient receiving', () => {
       const err = await client.getReceivedEmail(EMAIL_ID).catch((e: unknown) => e);
 
       expect(err).toBeInstanceOf(ApiError);
-      expect((err as ApiError).suggestion).toBeUndefined();
+      expect((err as ApiError).suggestion ?? '').not.toContain('email_id');
     });
   });
 

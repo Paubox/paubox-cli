@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createProgram } from '../../src/index';
 import { FormsApiClient } from '../../src/lib/forms-api';
-import { ApiError, ConfigError } from '../../src/lib/errors';
+import { ApiError, ConfigError, ValidationError } from '../../src/lib/errors';
 
 jest.mock('../../src/lib/forms-api');
 jest.mock('../../src/lib/api', () => ({
@@ -178,7 +178,7 @@ describe('paubox forms submit', () => {
     ).rejects.toThrow(ConfigError);
   });
 
-  it('throws ConfigError when --data-file contains invalid JSON', async () => {
+  it('throws ValidationError when --data-file contains invalid JSON', async () => {
     const filePath = path.join(tmpDir, 'bad.json');
     fs.writeFileSync(filePath, 'not json at all');
     await expect(
@@ -186,10 +186,10 @@ describe('paubox forms submit', () => {
         'node', 'paubox', 'forms', 'submit', 'abc123',
         '--data-file', filePath,
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
-  it('throws ConfigError when --data-file JSON root is an array', async () => {
+  it('throws ValidationError when --data-file JSON root is an array', async () => {
     const filePath = path.join(tmpDir, 'arr.json');
     fs.writeFileSync(filePath, '["a","b"]');
     await expect(
@@ -197,7 +197,7 @@ describe('paubox forms submit', () => {
         'node', 'paubox', 'forms', 'submit', 'abc123',
         '--data-file', filePath,
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
   it('throws ConfigError when --data-file has non-string values', async () => {

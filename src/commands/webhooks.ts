@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import * as credentials from '../lib/credentials';
-import { AuthError, ConfigError } from '../lib/errors';
+import { AuthError, ConfigError, ValidationError } from '../lib/errors';
 import { printInfo, printJson, printSuccess, printTable, printWarning } from '../lib/output';
 import { WebhooksApiClient } from '../lib/webhooks-api';
 import type {
@@ -14,14 +14,14 @@ const STATUSES = ['active', 'disabled'] as const;
 
 function parseIntStrict(value: string, optionName: string): number {
   if (!/^-?\d+$/.test(value)) {
-    throw new ConfigError(`${optionName} must be an integer. Got "${value}".`);
+    throw new ValidationError(`${optionName} must be an integer. Got "${value}".`);
   }
   return parseInt(value, 10);
 }
 
 function parseStatus(value: string): (typeof STATUSES)[number] {
   if (!(STATUSES as readonly string[]).includes(value)) {
-    throw new ConfigError(
+    throw new ValidationError(
       `--status must be one of: ${STATUSES.join(', ')}. Got "${value}".`,
     );
   }
@@ -40,8 +40,9 @@ async function createClient(): Promise<WebhooksApiClient> {
   const key = creds?.formsApiKey ?? creds?.apiKey;
   if (!key) {
     throw new AuthError(
-      'Not authenticated.',
-      'Run `paubox auth login` to store an API key.',
+      'No API key is stored.',
+      'Run `paubox auth login`, or `paubox auth set-forms-key` for a scoped key. ' +
+        'Either key can manage webhooks; its scopes decide which events.',
     );
   }
   return new WebhooksApiClient(undefined, key);

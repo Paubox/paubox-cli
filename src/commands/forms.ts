@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import type { Command } from 'commander';
 import { FormsApiClient } from '../lib/forms-api';
 import { resolveAttachments } from '../lib/api';
-import { ConfigError } from '../lib/errors';
+import { ConfigError, ValidationError } from '../lib/errors';
 import { printJson, printSuccess, printInfo } from '../lib/output';
 import { registerFormsAdminCommands } from './forms-admin';
 import { registerFormsWebhookCommands } from './forms-webhooks';
@@ -42,11 +42,11 @@ function readDataFile(filePath: string): Record<string, string> {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new ConfigError(`--data-file "${filePath}" is not valid JSON.`);
+    throw new ValidationError(`--data-file "${filePath}" is not valid JSON.`);
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new ConfigError('--data-file must contain a JSON object.');
+    throw new ValidationError('--data-file must contain a JSON object.');
   }
 
   const obj = parsed as Record<string, unknown>;
