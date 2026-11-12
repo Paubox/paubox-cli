@@ -55,7 +55,9 @@ function fromErrorObject(entry: unknown): string | null {
   const details = typeof obj.details === 'string' ? obj.details : null;
   const message = typeof obj.message === 'string' ? obj.message : null;
 
-  if (title && details && title !== details) return `${title}: ${details}`;
+  // `details` is always the complete sentence. `title` is either a short form of
+  // it ("Invalid Access Token") or, for model validation errors, just a category
+  // ("Message"), so prefixing it adds noise: "Message: From domain is not allowed…".
   return details ?? title ?? message;
 }
 
@@ -92,7 +94,8 @@ export function extractMessage(body: string): string | null {
   // Email API ErrorBuilder: {"errors": [{code, title, details}], "sourceTrackingId": "..."}
   if (Array.isArray(obj.errors)) {
     const parts = obj.errors.map(fromErrorObject).filter((p): p is string => Boolean(p));
-    if (parts.length > 0) return collapse(parts.join('; '));
+    // The Email API can repeat the same entry (seen live on a 401), so de-duplicate.
+    if (parts.length > 0) return collapse([...new Set(parts)].join('; '));
   }
 
   // DRF field errors: {"errors": {"email": ["is invalid"]}} — also seen at the top level.
@@ -141,6 +144,18 @@ function headline(operation: string, status: number, detail: string | null): str
     : `${operation} failed (${status} ${statusText}).`;
 }
 
+/**
+ * The Email API's sender-domain rejections are the most common 400 for a new
+ * key, and the fix (a verified --from domain) isn't obvious from the message.
+ */
+function badRequestHint(service: ServiceName, detail: string | null): string {
+  if (service === 'email' && detail && /from\b.*\bdomain/i.test(detail)) {
+    return 'Use a --from address on a domain verified for this API key. ' +
+      'Check the domains in the Paubox dashboard, or set a default with `paubox config set defaultFrom <email>`.';
+  }
+  return 'The API rejected the request as malformed. Fix the field named above and retry.';
+}
+
 function retryAfterHint(response: Response): string {
   const retryAfter = response.headers?.get?.('retry-after');
   return retryAfter
@@ -167,7 +182,10 @@ export async function throwForResponse(response: Response, ctx: ErrorContext): P
   };
 
   if (status === 401) {
-    return fail(AuthError.invalid(ctx.service));
+    // The Email API gives specific 401 reasons (account not active, endpoint
+    // username/domain not verified). Pass them through so the user isn't told
+    // to replace a key that is fine.
+    return fail(AuthError.invalid(ctx.service, detail));
   }
 
   if (status === 403) {
@@ -212,7 +230,7 @@ export async function throwForResponse(response: Response, ctx: ErrorContext): P
       new ApiError(
         headline(ctx.operation, status, detail),
         status,
-        hint ?? 'The API rejected the request as malformed. Fix the field named above and retry.',
+        hint ?? badRequestHint(ctx.service, detail),
       ),
     );
   }

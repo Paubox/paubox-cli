@@ -108,28 +108,41 @@ export class AuthError extends PauboxError {
    * interchangeable and look identical in `auth status`, so name the mismatch
    * explicitly — it is the most common cause of a 401 here.
    */
-  static invalid(what: 'email' | 'forms' | 'webhooks'): AuthError {
+  static invalid(what: 'email' | 'forms' | 'webhooks', reason?: string | null): AuthError {
+    // When the server says why (e.g. "Your Api Customer account has not been
+    // activated"), show it: the key may be fine and the fix lies elsewhere.
+    const withReason = (headline: string): string =>
+      reason ? `${headline.replace(/\.$/, '')}: ${reason}` : headline;
+    // Only account-state reasons (not activated, under review) need support;
+    // "Access token is missing…" is a key problem the user can fix.
+    const accountNote = reason && /\baccount\b|activat|review/i.test(reason)
+      ? ' This is about your Paubox account, not the key: contact Paubox support.'
+      : '';
+
     if (what === 'webhooks') {
       // Webhooks accepts either key: the Forms key when one is stored,
       // otherwise the Email API key. Name both so the user checks the right one.
       return new AuthError(
-        'The API key used for webhooks was rejected.',
+        withReason('The API key used for webhooks was rejected.'),
         'Webhooks uses your Forms key if one is stored, otherwise your Email API key. ' +
-          'Check both with `paubox auth status`, then re-run `paubox auth set-forms-key` or `paubox auth login`.',
+          'Check both with `paubox auth status`, then re-run `paubox auth set-forms-key` or `paubox auth login`.' +
+          accountNote,
         401,
       );
     }
     return what === 'email'
       ? new AuthError(
-          'The Paubox API key was rejected.',
+          withReason('The Paubox API key was rejected.'),
           'Confirm the key with `paubox auth status`, then re-run `paubox auth login`. ' +
-            'Note this endpoint needs an Email API key, not a scoped key from `auth set-forms-key`.',
+            'Note this endpoint needs an Email API key, not a scoped key from `auth set-forms-key`.' +
+            accountNote,
           401,
         )
       : new AuthError(
-          'The Forms API key was rejected.',
+          withReason('The Forms API key was rejected.'),
           'Re-run `paubox auth set-forms-key` with a scoped key that has the "forms" scope. ' +
-            'Note this endpoint needs a scoped key, not the Email API key from `auth login`.',
+            'Note this endpoint needs a scoped key, not the Email API key from `auth login`.' +
+            accountNote,
           401,
         );
   }

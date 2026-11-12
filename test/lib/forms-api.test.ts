@@ -583,7 +583,7 @@ describe('FormsApiClient authenticated error mapping', () => {
     const client = makeClient(mockFetch);
     await expect(client.listForms({ customerId: 42 })).rejects.toThrow(AuthError);
     await expect(client.listForms({ customerId: 42 })).rejects.toMatchObject({
-      message: 'The Forms API key was rejected.',
+      message: 'The Forms API key was rejected: unauthorized',
       suggestion: expect.stringContaining('paubox auth set-forms-key'),
     });
   });
