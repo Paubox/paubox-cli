@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v2.0.0...paubox-cli-v2.1.0) (2026-11-13)
+
+
+### Features
+
+* clear, actionable error messages and client identification ([#62](https://github.com/Paubox/paubox-cli/issues/62)) ([cd60d7b](https://github.com/Paubox/paubox-cli/commit/cd60d7b62d3af625b27f8533431e74fec0d60720))
+
+
+### Bug Fixes
+
+* scale the default timeout to the request body so large sends are not cut off ([#64](https://github.com/Paubox/paubox-cli/issues/64)) ([68dd267](https://github.com/Paubox/paubox-cli/commit/68dd26751a3b6dd77abbed564d7b075ef79f7eda))
+
 ## [2.0.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v1.4.0...paubox-cli-v2.0.0) (2026-10-14)
 
 
