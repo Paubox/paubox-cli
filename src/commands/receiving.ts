@@ -8,7 +8,7 @@ import type { OutputOptions, ReceivedEmailAddress } from '../types';
 
 async function requireClient(): Promise<PauboxApiClient> {
   const creds = await credentials.loadCredentials();
-  if (!creds?.apiKey) throw new AuthError('Not authenticated.');
+  if (!creds?.apiKey) throw AuthError.missing('email');
   return new PauboxApiClient(creds);
 }
 

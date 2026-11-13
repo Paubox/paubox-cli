@@ -1,7 +1,7 @@
 import { createProgram } from '../../src/index';
 import { WebhooksApiClient } from '../../src/lib/webhooks-api';
 import * as credentials from '../../src/lib/credentials';
-import { ConfigError } from '../../src/lib/errors';
+import { ValidationError } from '../../src/lib/errors';
 
 jest.mock('../../src/lib/webhooks-api', () => {
   const actual = jest.requireActual('../../src/lib/webhooks-api');
@@ -82,7 +82,7 @@ describe('paubox webhooks list', () => {
 
   it('rejects a non-integer --page', async () => {
     captureStdout();
-    await expect(run('list', '--page', 'two')).rejects.toThrow(ConfigError);
+    await expect(run('list', '--page', 'two')).rejects.toThrow(ValidationError);
   });
 
   it('prints a table of subscriptions', async () => {
@@ -330,6 +330,6 @@ describe('webhook credentials', () => {
   it('refuses when neither key is stored', async () => {
     mockLoadCredentials.mockResolvedValue(null);
     captureStdout();
-    await expect(run('list')).rejects.toThrow(/Not authenticated/);
+    await expect(run('list')).rejects.toThrow(/No API key is stored/);
   });
 });

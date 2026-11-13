@@ -4,7 +4,7 @@ import * as path from 'path';
 import { createProgram } from '../../src/index';
 import { FormsApiClient } from '../../src/lib/forms-api';
 import * as credentials from '../../src/lib/credentials';
-import { ApiError, AuthError, ConfigError } from '../../src/lib/errors';
+import { ApiError, AuthError, ConfigError, ValidationError } from '../../src/lib/errors';
 
 jest.mock('../../src/lib/forms-api');
 jest.mock('../../src/lib/credentials');
@@ -153,22 +153,22 @@ describe('paubox forms list', () => {
     expect(JSON.parse(joined(writeSpy))).toEqual(LIST_RESPONSE);
   });
 
-  it('throws ConfigError for non-integer --customer-id', async () => {
+  it('throws ValidationError for non-integer --customer-id', async () => {
     await expect(
       createProgram().parseAsync(['node', 'paubox', 'forms', 'list', '--customer-id', 'abc']),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
     expect(MockFormsApiClient.prototype.listForms).not.toHaveBeenCalled();
   });
 
-  it('throws ConfigError for non-integer --page', async () => {
+  it('throws ValidationError for non-integer --page', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'list', '--customer-id', '42', '--page', '1.5',
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
-  it('throws ConfigError for invalid --active value', async () => {
+  it('throws ValidationError for invalid --active value', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'list', '--customer-id', '42', '--active', 'yes',
@@ -176,20 +176,20 @@ describe('paubox forms list', () => {
     ).rejects.toThrow('--active must be "true" or "false"');
   });
 
-  it('throws ConfigError for invalid --order-by column', async () => {
+  it('throws ValidationError for invalid --order-by column', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'list', '--customer-id', '42', '--order-by', 'bogus',
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
-  it('throws ConfigError for invalid --order direction', async () => {
+  it('throws ValidationError for invalid --order direction', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'list', '--customer-id', '42', '--order', 'sideways',
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
   it('surfaces AuthError when no forms API key is configured', async () => {
@@ -250,10 +250,10 @@ describe('paubox forms stats', () => {
     expect(JSON.parse(joined(writeSpy))).toEqual(STATS_RESPONSE);
   });
 
-  it('throws ConfigError for non-integer --customer-id', async () => {
+  it('throws ValidationError for non-integer --customer-id', async () => {
     await expect(
       createProgram().parseAsync(['node', 'paubox', 'forms', 'stats', '--customer-id', 'x']),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 });
 
@@ -314,20 +314,20 @@ describe('paubox forms submissions', () => {
     expect(JSON.parse(joined(writeSpy))).toEqual(SUBMISSIONS_RESPONSE);
   });
 
-  it('throws ConfigError for invalid --order-by column', async () => {
+  it('throws ValidationError for invalid --order-by column', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'submissions', 'form-1', '--order-by', 'title',
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
-  it('throws ConfigError for non-integer --items', async () => {
+  it('throws ValidationError for non-integer --items', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'submissions', 'form-1', '--items', 'many',
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 });
 
@@ -639,7 +639,7 @@ describe('paubox forms create', () => {
     expect(body.form_json).toEqual([{ q: 1 }]);
   });
 
-  it('throws ConfigError when --form-json-file is not valid JSON', async () => {
+  it('throws ValidationError when --form-json-file is not valid JSON', async () => {
     const badPath = path.join(tmpDir, 'bad.json');
     fs.writeFileSync(badPath, 'not json');
 
@@ -648,7 +648,7 @@ describe('paubox forms create', () => {
         'node', 'paubox', 'forms', 'create',
         '--title', 'T', '--customer-id', '1', '--form-json-file', badPath,
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
     expect(MockFormsApiClient.prototype.createForm).not.toHaveBeenCalled();
   });
 
@@ -667,13 +667,13 @@ describe('paubox forms create', () => {
   // and exits with the CLI version (implementation bug — see forms-admin.ts).
   // The default path (version: 1) is covered by the minimal-body test above.
 
-  it('throws ConfigError for non-integer --customer-id', async () => {
+  it('throws ValidationError for non-integer --customer-id', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'create',
         '--title', 'T', '--customer-id', 'acme', '--form-json-file', formJsonPath,
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
   it('throws ConfigError when --form-html-file cannot be read', async () => {
@@ -768,15 +768,15 @@ describe('paubox forms update', () => {
     expect(MockFormsApiClient.prototype.updateForm).not.toHaveBeenCalled();
   });
 
-  it('throws ConfigError for invalid --active value', async () => {
+  it('throws ValidationError for invalid --active value', async () => {
     await expect(
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'update', 'form-1', '--active', 'maybe',
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
-  it('throws ConfigError when --form-json-file is invalid JSON', async () => {
+  it('throws ValidationError when --form-json-file is invalid JSON', async () => {
     const badPath = path.join(tmpDir, 'bad.json');
     fs.writeFileSync(badPath, '{oops');
 
@@ -784,7 +784,7 @@ describe('paubox forms update', () => {
       createProgram().parseAsync([
         'node', 'paubox', 'forms', 'update', 'form-1', '--form-json-file', badPath,
       ]),
-    ).rejects.toThrow(ConfigError);
+    ).rejects.toThrow(ValidationError);
   });
 
   it('outputs {status, formId} with --json', async () => {

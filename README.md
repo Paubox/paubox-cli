@@ -406,8 +406,9 @@ These flags work with any command:
 
 | Flag | Description |
 |------|-------------|
-| `--json` | Output result as JSON (useful for scripting) |
+| `--json` | Output result as JSON (useful for scripting). Errors are written to stderr as JSON too. |
 | `-q, --quiet` | Suppress non-essential output |
+| `--timeout <seconds>` | Per-request timeout. Defaults to 30 seconds. |
 | `-v, --version` | Print version |
 | `--help` | Show help |
 
@@ -418,12 +419,86 @@ paubox --json send --to to@example.com --from from@example.com --subject Hi --te
 # {"sourceTrackingId":"abc123-def456"}
 ```
 
+## Errors
+
+### Exit codes
+
+Every failure exits with a code naming its kind, so a script can branch on *why*
+a command failed without parsing stderr.
+
+| Code | Meaning | Typical cause |
+|------|---------|---------------|
+| `0` | Success | |
+| `1` | Unexpected error | A bug in the CLI — please report it |
+| `2` | Authentication | No key stored, key rejected, or key not scoped for the operation |
+| `3` | Validation | The arguments were rejected locally; nothing was sent |
+| `4` | API error | Paubox accepted the request and refused or failed it |
+| `5` | Network | DNS, TLS, connection or timeout — the request never arrived |
+| `6` | Configuration | This machine is not set up (no default sender, bad base URL override) |
+
+```bash
+paubox send --to bad@ --from me@example.com --subject Hi --text Hello
+echo $?   # 3 — nothing was sent
+```
+
+### Machine-readable errors
+
+Under `--json`, errors are written to **stderr** as JSON while stdout stays
+clean for results:
+
+```bash
+paubox --json send --to bad@ --from me@example.com --subject Hi --text Hello
+```
+
+```json
+{
+  "error": {
+    "type": "validation",
+    "message": "Invalid message: --to: \"bad@\" is not a valid email address",
+    "suggestion": "Fix the arguments listed above. Nothing was sent.",
+    "problems": ["--to: \"bad@\" is not a valid email address"]
+  }
+}
+```
+
+### Request IDs
+
+Every request carries an `X-Request-Id` of the form `pbcli-<uuid>`, and any
+failure that reached Paubox prints it:
+
+```
+✗ Send email failed (422 Unprocessable Entity): Invalid Recipient: nope@ is not a valid address
+  Hint: The API rejected the request as malformed. Fix the field named above and retry.
+  Request ID: pbcli-9f1c2d3e-4b5a-6789-abcd-ef0123456789
+```
+
+Quote that ID in a support ticket — it identifies the request in Paubox's logs.
+
+### `paubox doctor`
+
+Checks the things that usually turn out to be wrong: runtime version, where
+credentials are stored and whether each key is set, whether a base-URL override
+is in effect, and whether each API is reachable from this machine.
+
+```bash
+paubox doctor
+```
+
+### Retries
+
+Idempotent requests (GETs) are retried up to twice with backoff on `429`, `502`,
+`503`, `504` and on transient connection failures, honouring `Retry-After` where
+the API sends one. Sends are never replayed — a `POST` that may have been
+accepted is reported rather than repeated.
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
 | `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
+| `PAUBOX_TIMEOUT` | Per-request timeout in seconds. Defaults to `30`. `--timeout` takes precedence. |
+| `PAUBOX_DEBUG` | Set to `1` to log each request's method, URL, status, timing and request ID to stderr. Credentials are never logged. |
 
 These point the `paubox forms` commands at a non-production environment without
 patching and rebuilding:

@@ -72,7 +72,7 @@ describe('printError', () => {
 
   it('writes suggestion when provided', () => {
     const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    output.printError('bad thing', 'try this instead');
+    output.printError('bad thing', { suggestion: 'try this instead' });
     const written = spy.mock.calls.map((c) => c[0] as string).join('');
     expect(written).toContain('try this instead');
     spy.mockRestore();
@@ -82,6 +82,44 @@ describe('printError', () => {
     const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     output.printError('bad thing');
     expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it('lists each validation problem under the headline', () => {
+    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    output.printError('Invalid message', { problems: ['--to: bad', '--from: bad'] });
+    const written = spy.mock.calls.map((c) => c[0] as string).join('');
+    expect(written).toContain('--to: bad');
+    expect(written).toContain('--from: bad');
+    spy.mockRestore();
+  });
+
+  it('does not repeat a single problem that is already the headline', () => {
+    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    output.printError('Invalid message: --to: bad', { problems: ['--to: bad'] });
+    const written = spy.mock.calls.map((c) => c[0] as string).join('');
+    expect(written.split('--to: bad')).toHaveLength(2);
+    spy.mockRestore();
+  });
+
+  // The request id is the one string support needs to find the call in
+  // Paubox's logs, so it has to be on screen when something fails.
+  it('prints the request id when the failure reached Paubox', () => {
+    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    output.printError('Send email failed', { requestId: 'pbcli-abc-123' });
+    const written = spy.mock.calls.map((c) => c[0] as string).join('');
+    expect(written).toContain('Request ID: pbcli-abc-123');
+    spy.mockRestore();
+  });
+});
+
+describe('printErrorJson', () => {
+  it('writes the error envelope to stderr so stdout stays parseable', () => {
+    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    output.printErrorJson({ error: { type: 'validation', message: 'nope' } });
+    expect(JSON.parse(spy.mock.calls[0][0] as string)).toEqual({
+      error: { type: 'validation', message: 'nope' },
+    });
     spy.mockRestore();
   });
 });

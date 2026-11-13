@@ -74,7 +74,7 @@ describe('FormsApiClient base URL', () => {
     const mockFetch = makeFetch(200, {});
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm(FORM_ID);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch.mock.calls[0][0]).toBe(
       `${DEFAULT_FORMS_BASE_URL}/public/form_data/${FORM_ID}`,
     );
   });
@@ -84,7 +84,7 @@ describe('FormsApiClient base URL', () => {
     const mockFetch = makeFetch(200, {});
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm(FORM_ID);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch.mock.calls[0][0]).toBe(
       `https://staging.example.com/forms/public/form_data/${FORM_ID}`,
     );
   });
@@ -96,7 +96,7 @@ describe('FormsApiClient base URL', () => {
     await client.listSubmissions(UUID, {});
     expect(mockFetch).toHaveBeenCalledWith(
       `https://staging.example.com/forms/api/forms/${UUID}/submissions`,
-      { headers: { Authorization: 'Bearer test-key' } },
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer test-key' }) }),
     );
   });
 
@@ -109,7 +109,7 @@ describe('FormsApiClient base URL', () => {
       'https://explicit.example.com/forms',
     );
     await client.getForm(FORM_ID);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch.mock.calls[0][0]).toBe(
       `https://explicit.example.com/forms/public/form_data/${FORM_ID}`,
     );
   });

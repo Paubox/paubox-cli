@@ -1,4 +1,20 @@
 import { ApiError, AuthError, ConfigError } from './errors';
+
+/**
+ * Exports must be a real 200 with a body. Any other 2xx (e.g. 204) would
+ * otherwise be written to disk as an empty file with no error.
+ */
+function requireOk200(response: Response, operation: string): void {
+  if (response.status !== 200) {
+    throw new ApiError(
+      `${operation} failed: expected a file but the server answered ${response.status} with no export.`,
+      response.status,
+      'Check that the form has submissions, then retry.',
+    );
+  }
+}
+import { HttpClient } from './http';
+import type { FetchFn } from './http';
 import type {
   CreateFormBody,
   FormGetResponse,
@@ -61,69 +77,69 @@ function sanitizePathSegment(value: string, label: string, requireUuid: boolean)
   return encodeURIComponent(value);
 }
 
-type FetchFn = typeof fetch;
+const FORM_NOT_FOUND_HINT =
+  'Check the form ID. Run `paubox forms list` to see the forms on this account.';
 
 export class FormsApiClient {
-  private readonly fetchFn: FetchFn;
   private readonly apiKey: string | null;
   private readonly baseUrl: string;
+  private readonly http: HttpClient;
 
   constructor(fetchFn?: FetchFn, apiKey?: string | null, baseUrl?: string) {
-    this.fetchFn = fetchFn ?? globalThis.fetch;
     this.apiKey = apiKey ?? null;
     this.baseUrl = baseUrl ?? resolveFormsBaseUrl();
+    this.http = new HttpClient({
+      service: 'forms',
+      fetchFn,
+      authHeaders: () => this.authHeaders(),
+    });
   }
 
   async getForm(formId: string): Promise<FormGetResponse> {
     const safeFormId = sanitizePathSegment(formId, 'formId', false);
-    const url = `${this.baseUrl}/public/form_data/${safeFormId}`;
-    const response = await this.fetchFn(url);
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new ApiError('Form not found.', 404, 'Check the form ID and try again.');
-      }
-      const body = await response.text();
-      throw new ApiError(`Get form failed (${response.status}): ${body}`, response.status);
-    }
-
+    const response = await this.http.request(
+      `${this.baseUrl}/public/form_data/${safeFormId}`,
+      {},
+      { operation: 'Get form', anonymous: true, hints: { 404: FORM_NOT_FOUND_HINT } },
+    );
     return response.json() as Promise<FormGetResponse>;
   }
 
   async submitForm(formId: string, payload: FormSubmissionPayload): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', false);
-    const url = `${this.baseUrl}/api/forms/${safeFormId}/submissions`;
-    const response = await this.fetchFn(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    await this.http.request(
+      `${this.baseUrl}/api/forms/${safeFormId}/submissions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      {
+        operation: 'Submit form',
+        anonymous: true,
+        hints: {
+          404: FORM_NOT_FOUND_HINT,
+          422: 'Check that your field names and values match the form definition. ' +
+            'Run `paubox forms get <formId>` to see the fields this form expects.',
+        },
+      },
+    );
+  }
+
+  private formsRequest(
+    url: string,
+    init: RequestInit | undefined,
+    operation: string,
+    hints?: Partial<Record<number, string>>,
+  ): Promise<Response> {
+    return this.http.request(url, init ?? {}, {
+      operation,
+      hints: {
+        403: 'Check that --customer-id matches your account and that your plan includes Forms.',
+        404: FORM_NOT_FOUND_HINT,
+        ...(hints ?? {}),
+      },
     });
-
-    if (response.status === 201) {
-      return;
-    }
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new ApiError('Form not found.', 404, 'Check the form ID and try again.');
-      }
-      if (response.status === 413) {
-        throw new ApiError(
-          'Payload too large (413).',
-          413,
-          'Reduce the number or size of --attach files. Maximum total request size is 250 MB.',
-        );
-      }
-      const body = await response.text();
-      if (response.status === 422) {
-        throw new ApiError(
-          `Submission validation failed: ${body}`,
-          422,
-          'Check your field names and values match the form definition.',
-        );
-      }
-      throw new ApiError(`Submit failed (${response.status}): ${body}`, response.status);
-    }
   }
 
   async listForms(params: ListFormsParams): Promise<FormListResponse> {
@@ -140,11 +156,7 @@ export class FormsApiClient {
 
     const qs = query.toString();
     const url = `${this.baseUrl}/api/forms${qs ? `?${qs}` : ''}`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(url, undefined, 'List forms');
     return response.json() as Promise<FormListResponse>;
   }
 
@@ -153,91 +165,61 @@ export class FormsApiClient {
     if (customerId !== undefined) query.set('customer_id', String(customerId));
     const qs = query.toString();
     const url = `${this.baseUrl}/api/forms/stats${qs ? `?${qs}` : ''}`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(url, undefined, 'Get form stats');
     return response.json() as Promise<FormStatsResponse>;
   }
 
   async getFormAdmin(formId: string): Promise<FormRecord> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const url = `${this.baseUrl}/api/forms/${safeFormId}`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(url, undefined, 'Get form');
     const body = (await response.json()) as { data: FormRecord };
     return body.data;
   }
 
   async createForm(body: CreateFormBody): Promise<{ id: string }> {
     const url = `${this.baseUrl}/api/forms`;
-    const response = await this.fetchFn(url, {
-      method: 'POST',
-      headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(
+      url,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      'Create form',
+    );
     return response.json() as Promise<{ id: string }>;
   }
 
   async updateForm(formId: string, body: UpdateFormBody): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const url = `${this.baseUrl}/api/forms/${safeFormId}`;
-    const response = await this.fetchFn(url, {
-      method: 'PUT',
-      headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    await this.formsRequest(
+      url,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      'Update form',
+    );
   }
 
   async archiveForm(formId: string): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const url = `${this.baseUrl}/api/forms/${safeFormId}/archive`;
-    const response = await this.fetchFn(url, {
-      method: 'POST',
-      headers: this.authHeaders(),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    await this.formsRequest(url, { method: 'POST' }, 'Archive form');
   }
 
   async unarchiveForm(formId: string): Promise<void> {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const url = `${this.baseUrl}/api/forms/${safeFormId}/unarchive`;
-    const response = await this.fetchFn(url, {
-      method: 'POST',
-      headers: this.authHeaders(),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    await this.formsRequest(url, { method: 'POST' }, 'Unarchive form');
   }
 
   async copyForm(formId: string, title: string): Promise<FormRecord> {
     const url = `${this.baseUrl}/api/forms/copy`;
-    const response = await this.fetchFn(url, {
-      method: 'POST',
-      headers: { ...this.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ form_id: formId, title }),
-    });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ form_id: formId, title }),
+      },
+      'Copy form',
+    );
     return response.json() as Promise<FormRecord>;
   }
 
@@ -257,11 +239,7 @@ export class FormsApiClient {
     const url = `${this.baseUrl}/api/forms/${safeFormId}/submissions${
       qs ? `?${qs}` : ''
     }`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (!response.ok) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(url, undefined, 'List submissions');
     return response.json() as Promise<SubmissionListResponse>;
   }
 
@@ -272,11 +250,8 @@ export class FormsApiClient {
       submissionId !== undefined
         ? `${base}/${sanitizePathSegment(submissionId, 'submissionId', true)}`
         : base;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (response.status !== 200) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(url, undefined, 'Export submissions CSV');
+    requireOk200(response, 'Export submissions CSV');
     return Buffer.from(await response.arrayBuffer());
   }
 
@@ -284,43 +259,15 @@ export class FormsApiClient {
     const safeFormId = sanitizePathSegment(formId, 'formId', true);
     const safeSubmissionId = sanitizePathSegment(submissionId, 'submissionId', true);
     const url = `${this.baseUrl}/api/forms/${safeFormId}/submissions/${safeSubmissionId}/submission-pdf`;
-    const response = await this.fetchFn(url, { headers: this.authHeaders() });
-
-    if (response.status !== 200) {
-      await this.handleError(response);
-    }
+    const response = await this.formsRequest(url, undefined, 'Export submission PDF');
+    requireOk200(response, 'Export submission PDF');
     return Buffer.from(await response.arrayBuffer());
   }
 
   private authHeaders(): Record<string, string> {
     if (!this.apiKey) {
-      throw new AuthError(
-        'No Forms API key configured.',
-        'Run `paubox auth set-forms-key` with a scoped API key that has the "forms" scope.',
-      );
+      throw AuthError.missing('forms');
     }
     return { Authorization: `Bearer ${this.apiKey}` };
-  }
-
-  private async handleError(response: Response): Promise<never> {
-    if (response.status === 401) {
-      throw new AuthError(
-        'Forms API key is invalid or lacks the "forms" scope.',
-        'Run `paubox auth set-forms-key` with a scoped API key that has the "forms" scope.',
-      );
-    }
-    if (response.status === 403) {
-      const body = await response.text();
-      throw new ApiError(
-        `Forbidden (403): ${body}`,
-        403,
-        'Check --customer-id matches your account, and that your plan includes Forms access.',
-      );
-    }
-    if (response.status === 404) {
-      throw new ApiError('Form or submission not found.', 404, 'Check the ID and try again.');
-    }
-    const body = await response.text();
-    throw new ApiError(`Request failed (${response.status}): ${body}`, response.status);
   }
 }

@@ -3,6 +3,7 @@ import { PauboxApiClient, resolveAttachments } from '../lib/api';
 import * as credentials from '../lib/credentials';
 import * as configStore from '../lib/config-store';
 import { AuthError, ConfigError } from '../lib/errors';
+import { validateMessage, validateScheduledAt } from '../lib/validate';
 import { printJson, printSuccess } from '../lib/output';
 import type { OutputOptions } from '../types';
 
@@ -32,9 +33,6 @@ export function registerScheduleCommand(program: Command): void {
     }) => {
       const opts = program.opts<OutputOptions>();
 
-      const creds = await credentials.loadCredentials();
-      if (!creds?.apiKey) throw new AuthError('Not authenticated.');
-
       const from = cmdOpts.from ?? configStore.getConfigValue('defaultFrom');
       if (!from) {
         throw new ConfigError(
@@ -43,11 +41,23 @@ export function registerScheduleCommand(program: Command): void {
         );
       }
 
-      if (!cmdOpts.text && !cmdOpts.html) {
-        throw new ConfigError('Provide at least one of --text or --html.');
-      }
-
+      // Validate before reading the attachments off disk and before the round
+      // trip: a malformed address should cost nothing and name itself.
       const attachments = cmdOpts.attachment ? resolveAttachments(cmdOpts.attachment) : [];
+      validateMessage({
+        to: cmdOpts.to,
+        from,
+        subject: cmdOpts.subject,
+        text: cmdOpts.text,
+        html: cmdOpts.html,
+        attachments,
+      });
+      validateScheduledAt(cmdOpts.at);
+
+      // Credentials are checked after local validation so a badly composed
+      // message reports what is wrong with it, not a missing key.
+      const creds = await credentials.loadCredentials();
+      if (!creds?.apiKey) throw AuthError.missing('email');
 
       const client = new PauboxApiClient(creds);
       const result = await client.scheduleEmail({
@@ -81,7 +91,7 @@ export function registerScheduleCommand(program: Command): void {
       const opts = program.opts<OutputOptions>();
 
       const creds = await credentials.loadCredentials();
-      if (!creds?.apiKey) throw new AuthError('Not authenticated.');
+      if (!creds?.apiKey) throw AuthError.missing('email');
 
       const client = new PauboxApiClient(creds);
       const result = await client.getScheduledMessage(trackingId);
@@ -104,7 +114,7 @@ export function registerScheduleCommand(program: Command): void {
       const opts = program.opts<OutputOptions>();
 
       const creds = await credentials.loadCredentials();
-      if (!creds?.apiKey) throw new AuthError('Not authenticated.');
+      if (!creds?.apiKey) throw AuthError.missing('email');
 
       const client = new PauboxApiClient(creds);
       const result = await client.rescheduleMessage(trackingId, cmdOpts.at);
@@ -126,7 +136,7 @@ export function registerScheduleCommand(program: Command): void {
       const opts = program.opts<OutputOptions>();
 
       const creds = await credentials.loadCredentials();
-      if (!creds?.apiKey) throw new AuthError('Not authenticated.');
+      if (!creds?.apiKey) throw AuthError.missing('email');
 
       const client = new PauboxApiClient(creds);
       const result = await client.cancelScheduledMessage(trackingId);

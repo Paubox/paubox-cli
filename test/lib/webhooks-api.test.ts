@@ -90,7 +90,7 @@ describe('WebhooksApiClient base URL', () => {
     await client(mockFetch).listSubscriptions();
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.staging.paubox.net/v1/webhooks/endpoints',
-      { headers: AUTH },
+      expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
     );
   });
 
@@ -105,7 +105,7 @@ describe('WebhooksApiClient base URL', () => {
     await explicit.listSubscriptions();
     expect(mockFetch).toHaveBeenCalledWith(
       'https://explicit.example.com/v1/webhooks/endpoints',
-      { headers: AUTH },
+      expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
     );
   });
 
@@ -123,16 +123,19 @@ describe('WebhooksApiClient.listSubscriptions', () => {
   it('calls the endpoints collection with the Bearer key', async () => {
     const mockFetch = makeFetch(200, LIST);
     const result = await client(mockFetch).listSubscriptions();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints`, { headers: AUTH });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/endpoints`,
+      expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
+    );
     expect(result).toEqual(LIST);
   });
 
   it('serializes pagination into the query string', async () => {
     const mockFetch = makeFetch(200, LIST);
     await client(mockFetch).listSubscriptions({ page: 2, items: 10 });
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints?page=2&items=10`, {
-      headers: AUTH,
-    });
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints?page=2&items=10`, expect.objectContaining({
+      headers: expect.objectContaining(AUTH),
+    }));
   });
 
   it('throws AuthError before making a request when no key is configured', async () => {
@@ -146,7 +149,10 @@ describe('WebhooksApiClient.getSubscription', () => {
   it('unwraps the data envelope', async () => {
     const mockFetch = makeFetch(200, { data: SUBSCRIPTION });
     const result = await client(mockFetch).getSubscription(ID);
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints/${ID}`, { headers: AUTH });
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE}/endpoints/${ID}`,
+      expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
+    );
     expect(result).toEqual(SUBSCRIPTION);
   });
 
@@ -167,11 +173,11 @@ describe('WebhooksApiClient.createSubscription', () => {
   it('POSTs the subscription and returns the created record', async () => {
     const mockFetch = makeFetch(201, CREATED);
     const result = await client(mockFetch).createSubscription(body);
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints`, {
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints`, expect.objectContaining({
       method: 'POST',
-      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      headers: expect.objectContaining({ ...AUTH, 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
-    });
+    }));
     expect(result).toEqual(CREATED.data);
   });
 
@@ -186,11 +192,11 @@ describe('WebhooksApiClient.updateSubscription', () => {
   it('PATCHes only the provided fields', async () => {
     const mockFetch = makeFetch(200, { data: { ...SUBSCRIPTION, status: 'disabled' } });
     const result = await client(mockFetch).updateSubscription(ID, { status: 'disabled' });
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints/${ID}`, {
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints/${ID}`, expect.objectContaining({
       method: 'PATCH',
-      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      headers: expect.objectContaining({ ...AUTH, 'Content-Type': 'application/json' }),
       body: JSON.stringify({ status: 'disabled' }),
-    });
+    }));
     expect(result.status).toBe('disabled');
   });
 });
@@ -199,17 +205,17 @@ describe('WebhooksApiClient.deleteSubscription', () => {
   it('DELETEs and resolves on 204', async () => {
     const mockFetch = makeFetch(204, '');
     await expect(client(mockFetch).deleteSubscription(ID)).resolves.toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints/${ID}`, {
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/endpoints/${ID}`, expect.objectContaining({
       method: 'DELETE',
-      headers: AUTH,
-    });
+      headers: expect.objectContaining(AUTH),
+    }));
   });
 });
 
 describe('WebhooksApiClient error mapping', () => {
-  it('maps 401 to AuthError naming the forms scope', async () => {
+  it('maps 401 to an AuthError that covers both key types', async () => {
     const mockFetch = makeFetch(401, '');
-    await expect(client(mockFetch).listSubscriptions()).rejects.toThrow(/forms/);
+    await expect(client(mockFetch).listSubscriptions()).rejects.toThrow('The API key used for webhooks was rejected.');
     await expect(client(mockFetch).listSubscriptions()).rejects.toThrow(AuthError);
   });
 

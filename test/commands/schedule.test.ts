@@ -5,6 +5,7 @@ import { createProgram } from '../../src/index';
 import * as credentials from '../../src/lib/credentials';
 import * as configStore from '../../src/lib/config-store';
 import { PauboxApiClient } from '../../src/lib/api';
+import { ValidationError } from '../../src/lib/errors';
 
 jest.mock('../../src/lib/credentials');
 jest.mock('../../src/lib/api', () => ({
@@ -40,16 +41,31 @@ describe('paubox schedule send', () => {
         '--from', 'from@example.com',
         '--subject', 'Hi',
         '--text', 'Hello',
-        '--at', '2025-12-25T15:00:00Z',
+        '--at', '2099-12-25T15:00:00Z',
       ]),
     ).rejects.toThrow();
+  });
+
+  it('reports a past --at before a missing key', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    await expect(
+      createProgram().parseAsync([
+        'node', 'paubox', 'schedule', 'send',
+        '--to', 'to@example.com',
+        '--from', 'from@example.com',
+        '--subject', 'Hi',
+        '--text', 'Hello',
+        '--at', '2020-01-01T00:00:00Z',
+      ]),
+    ).rejects.toThrow(ValidationError);
+    expect(mockCredentials.loadCredentials).not.toHaveBeenCalled();
   });
 
   it('schedules email and prints tracking ID', async () => {
     mockCredentials.loadCredentials.mockResolvedValue(baseCreds);
     MockPauboxApiClient.prototype.scheduleEmail = jest.fn().mockResolvedValue({
       sourceTrackingId: 'sched-123',
-      scheduledAt: '2025-12-25T15:00:00Z',
+      scheduledAt: '2099-12-25T15:00:00Z',
       state: 'pending',
       data: 'Service accepted',
     });
@@ -61,12 +77,12 @@ describe('paubox schedule send', () => {
       '--from', 'from@example.com',
       '--subject', 'Hi',
       '--text', 'Hello',
-      '--at', '2025-12-25T15:00:00Z',
+      '--at', '2099-12-25T15:00:00Z',
     ]);
 
     const output = writeSpy.mock.calls.map((c) => c[0]).join('');
     expect(output).toContain('sched-123');
-    expect(output).toContain('2025-12-25T15:00:00Z');
+    expect(output).toContain('2099-12-25T15:00:00Z');
     writeSpy.mockRestore();
   });
 
@@ -74,7 +90,7 @@ describe('paubox schedule send', () => {
     mockCredentials.loadCredentials.mockResolvedValue(baseCreds);
     MockPauboxApiClient.prototype.scheduleEmail = jest.fn().mockResolvedValue({
       sourceTrackingId: 'sched-123',
-      scheduledAt: '2025-12-25T15:00:00Z',
+      scheduledAt: '2099-12-25T15:00:00Z',
       state: 'pending',
       data: 'ok',
     });
@@ -86,13 +102,13 @@ describe('paubox schedule send', () => {
       '--from', 'from@example.com',
       '--subject', 'Hi',
       '--text', 'Hello',
-      '--at', '2025-12-25T15:00:00Z',
+      '--at', '2099-12-25T15:00:00Z',
     ]);
 
     const output = writeSpy.mock.calls.map((c) => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(parsed.sourceTrackingId).toBe('sched-123');
-    expect(parsed.scheduledAt).toBe('2025-12-25T15:00:00Z');
+    expect(parsed.scheduledAt).toBe('2099-12-25T15:00:00Z');
     expect(parsed.state).toBe('pending');
     writeSpy.mockRestore();
   });
@@ -102,7 +118,7 @@ describe('paubox schedule send', () => {
     mockCredentials.loadCredentials.mockResolvedValue(baseCreds);
     MockPauboxApiClient.prototype.scheduleEmail = jest.fn().mockResolvedValue({
       sourceTrackingId: 'xyz',
-      scheduledAt: '2025-12-25T15:00:00Z',
+      scheduledAt: '2099-12-25T15:00:00Z',
       state: 'pending',
       data: 'ok',
     });
@@ -113,12 +129,12 @@ describe('paubox schedule send', () => {
       '--to', 'to@example.com',
       '--subject', 'Hi',
       '--text', 'Hello',
-      '--at', '2025-12-25T15:00:00Z',
+      '--at', '2099-12-25T15:00:00Z',
     ]);
 
     const callArg = (MockPauboxApiClient.prototype.scheduleEmail as jest.Mock).mock.calls[0][0];
     expect(callArg.from).toBe('default@example.com');
-    expect(callArg.scheduledAt).toBe('2025-12-25T15:00:00Z');
+    expect(callArg.scheduledAt).toBe('2099-12-25T15:00:00Z');
   });
 });
 
@@ -127,7 +143,7 @@ describe('paubox schedule status', () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'key' });
     MockPauboxApiClient.prototype.getScheduledMessage = jest.fn().mockResolvedValue({
       sourceTrackingId: 'sched-123',
-      scheduledAt: '2025-12-25T15:00:00Z',
+      scheduledAt: '2099-12-25T15:00:00Z',
       state: 'pending',
     });
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);

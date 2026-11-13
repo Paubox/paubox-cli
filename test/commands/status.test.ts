@@ -48,7 +48,7 @@ describe('paubox status', () => {
     MockPauboxApiClient.prototype.getMessageStatus = jest.fn();
     await expect(
       createProgram().parseAsync(['node', 'paubox', 'status', 'track-1']),
-    ).rejects.toThrow('Not authenticated.');
+    ).rejects.toThrow(/No Paubox API key is stored/);
     expect(MockPauboxApiClient.prototype.getMessageStatus).not.toHaveBeenCalled();
   });
 

@@ -34,7 +34,7 @@ describe('FormsApiClient.getForm', () => {
     const mockFetch = makeFetch(200, FORM_RESPONSE);
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm(FORM_ID);
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch.mock.calls[0][0]).toBe(
       `https://apx.paubox.com/forms/public/form_data/${FORM_ID}`,
     );
   });
@@ -43,7 +43,7 @@ describe('FormsApiClient.getForm', () => {
     const mockFetch = makeFetch(200, FORM_RESPONSE);
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm('form/with spaces');
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch.mock.calls[0][0]).toBe(
       'https://apx.paubox.com/forms/public/form_data/form%2Fwith%20spaces',
     );
   });
@@ -52,9 +52,9 @@ describe('FormsApiClient.getForm', () => {
     const mockFetch = makeFetch(200, FORM_RESPONSE);
     const client = new FormsApiClient(mockFetch as unknown as typeof fetch);
     await client.getForm(FORM_ID);
-    const callArgs = mockFetch.mock.calls[0];
-    // Called with only the URL (no options object), so no headers at all
-    expect(callArgs).toHaveLength(1);
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    // The public endpoint carries client-identity headers but never credentials.
+    expect(init.headers).not.toHaveProperty('Authorization');
   });
 
   it('throws ApiError with statusCode 404 on 404 response', async () => {
@@ -83,7 +83,7 @@ describe('FormsApiClient.submitForm', () => {
       `https://apx.paubox.com/forms/api/forms/${FORM_ID}/submissions`,
       expect.objectContaining({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       }),
     );
   });
@@ -142,7 +142,7 @@ describe('FormsApiClient.submitForm', () => {
       statusCode: 422,
     });
     await expect(client.submitForm(FORM_ID, payload)).rejects.toThrow(
-      'Submission validation failed',
+      'Submit form failed (422 Unprocessable Entity): invalid field',
     );
   });
 
@@ -292,7 +292,7 @@ describe('FormsApiClient.listForms', () => {
     const client = makeClient(mockFetch);
     await client.listForms({ customerId: 42 });
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(init.headers).toEqual({ Authorization: `Bearer ${API_KEY}` });
+    expect(init.headers).toMatchObject({ Authorization: `Bearer ${API_KEY}` });
   });
 
   it('returns the parsed list response', async () => {
@@ -307,9 +307,9 @@ describe('FormsApiClient.getFormStats', () => {
     const mockFetch = makeAuthFetch(200, STATS_RESPONSE);
     const client = makeClient(mockFetch);
     await client.getFormStats();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/stats`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    });
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/stats`, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }),
+    }));
   });
 
   it('includes customer_id query param when provided', async () => {
@@ -332,9 +332,9 @@ describe('FormsApiClient.getFormAdmin', () => {
     const mockFetch = makeAuthFetch(200, { data: FORM_RECORD });
     const client = makeClient(mockFetch);
     await client.getFormAdmin(FORM_UUID);
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    });
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}`, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }),
+    }));
   });
 
   it('unwraps the {data} envelope', async () => {
@@ -362,10 +362,10 @@ describe('FormsApiClient.createForm', () => {
       `${BASE}/api/forms`,
       expect.objectContaining({
         method: 'POST',
-        headers: {
+        headers: expect.objectContaining({
           Authorization: `Bearer ${API_KEY}`,
           'Content-Type': 'application/json',
-        },
+        }),
       }),
     );
   });
@@ -394,10 +394,10 @@ describe('FormsApiClient.updateForm', () => {
       `${BASE}/api/forms/${FORM_UUID}`,
       expect.objectContaining({
         method: 'PUT',
-        headers: {
+        headers: expect.objectContaining({
           Authorization: `Bearer ${API_KEY}`,
           'Content-Type': 'application/json',
-        },
+        }),
       }),
     );
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -415,8 +415,8 @@ describe('FormsApiClient.updateForm', () => {
     const client = makeClient(mockFetch);
     await expect(client.updateForm(FORM_UUID, { title: 'x' })).rejects.toMatchObject({
       statusCode: 404,
-      message: 'Form or submission not found.',
-      suggestion: 'Check the ID and try again.',
+      message: 'Update form failed (404 Not Found): not found',
+      suggestion: expect.stringContaining('paubox forms list'),
     });
   });
 });
@@ -426,20 +426,20 @@ describe('FormsApiClient.archiveForm / unarchiveForm', () => {
     const mockFetch = makeAuthFetch(200, { detail: 'Form archived.' });
     const client = makeClient(mockFetch);
     await expect(client.archiveForm(FORM_UUID)).resolves.toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/archive`, {
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/archive`, expect.objectContaining({
       method: 'POST',
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    });
+      headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }),
+    }));
   });
 
   it('POSTs to /api/forms/:id/unarchive with Bearer header', async () => {
     const mockFetch = makeAuthFetch(200, { detail: 'Form unarchived.' });
     const client = makeClient(mockFetch);
     await expect(client.unarchiveForm(FORM_UUID)).resolves.toBeUndefined();
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/unarchive`, {
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/unarchive`, expect.objectContaining({
       method: 'POST',
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    });
+      headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }),
+    }));
   });
 });
 
@@ -452,10 +452,10 @@ describe('FormsApiClient.copyForm', () => {
       `${BASE}/api/forms/copy`,
       expect.objectContaining({
         method: 'POST',
-        headers: {
+        headers: expect.objectContaining({
           Authorization: `Bearer ${API_KEY}`,
           'Content-Type': 'application/json',
-        },
+        }),
       }),
     );
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -490,9 +490,9 @@ describe('FormsApiClient.listSubmissions', () => {
     const mockFetch = makeAuthFetch(200, SUBMISSION_LIST_RESPONSE);
     const client = makeClient(mockFetch);
     await client.listSubmissions(FORM_UUID, {});
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/submissions`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    });
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/api/forms/${FORM_UUID}/submissions`, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }),
+    }));
   });
 
   it('returns the parsed submission list response', async () => {
@@ -511,7 +511,7 @@ describe('FormsApiClient.exportSubmissionsCsv', () => {
     await client.exportSubmissionsCsv(FORM_UUID);
     expect(mockFetch).toHaveBeenCalledWith(
       `${BASE}/api/forms/${FORM_UUID}/submissions/submission-csv`,
-      { headers: { Authorization: `Bearer ${API_KEY}` } },
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }) }),
     );
   });
 
@@ -546,7 +546,7 @@ describe('FormsApiClient.exportSubmissionPdf', () => {
     await client.exportSubmissionPdf(FORM_UUID, SUB_UUID);
     expect(mockFetch).toHaveBeenCalledWith(
       `${BASE}/api/forms/${FORM_UUID}/submissions/${SUB_UUID}/submission-pdf`,
-      { headers: { Authorization: `Bearer ${API_KEY}` } },
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${API_KEY}` }) }),
     );
   });
 
@@ -566,6 +566,15 @@ describe('FormsApiClient.exportSubmissionPdf', () => {
       statusCode: 500,
     });
   });
+
+  it('rejects a 2xx that is not 200 instead of writing an empty file', async () => {
+    const mockFetch = makeAuthFetch(204, '');
+    const client = makeClient(mockFetch);
+    await expect(client.exportSubmissionPdf(FORM_UUID, SUB_UUID)).rejects.toMatchObject({
+      statusCode: 204,
+      message: expect.stringContaining('Export submission PDF failed'),
+    });
+  });
 });
 
 describe('FormsApiClient authenticated error mapping', () => {
@@ -574,7 +583,7 @@ describe('FormsApiClient authenticated error mapping', () => {
     const client = makeClient(mockFetch);
     await expect(client.listForms({ customerId: 42 })).rejects.toThrow(AuthError);
     await expect(client.listForms({ customerId: 42 })).rejects.toMatchObject({
-      message: 'Forms API key is invalid or lacks the "forms" scope.',
+      message: 'The Forms API key was rejected: unauthorized',
       suggestion: expect.stringContaining('paubox auth set-forms-key'),
     });
   });
@@ -582,10 +591,12 @@ describe('FormsApiClient authenticated error mapping', () => {
   it('maps 403 to ApiError with customer-id suggestion and body text', async () => {
     const mockFetch = makeAuthFetch(403, 'customer mismatch');
     const client = makeClient(mockFetch);
-    await expect(client.listForms({})).rejects.toThrow(ApiError);
+    // 403 is an authorization failure, not an API fault: the key authenticated
+    // and was refused, so it carries the auth exit code.
+    await expect(client.listForms({})).rejects.toThrow(AuthError);
     await expect(client.listForms({})).rejects.toMatchObject({
       statusCode: 403,
-      message: 'Forbidden (403): customer mismatch',
+      message: 'List forms failed (403 Forbidden): customer mismatch',
       suggestion: expect.stringContaining('--customer-id'),
     });
   });
@@ -595,8 +606,8 @@ describe('FormsApiClient authenticated error mapping', () => {
     const client = makeClient(mockFetch);
     await expect(client.getFormAdmin(FORM_UUID)).rejects.toMatchObject({
       statusCode: 404,
-      message: 'Form or submission not found.',
-      suggestion: 'Check the ID and try again.',
+      message: 'Get form failed (404 Not Found): not found',
+      suggestion: expect.stringContaining('paubox forms list'),
     });
   });
 
@@ -605,7 +616,7 @@ describe('FormsApiClient authenticated error mapping', () => {
     const client = makeClient(mockFetch);
     await expect(client.getFormStats()).rejects.toMatchObject({
       statusCode: 500,
-      message: 'Request failed (500): internal error',
+      message: 'Get form stats failed (500 Internal Server Error): internal error',
     });
   });
 });
@@ -633,7 +644,7 @@ describe('FormsApiClient without a Forms API key', () => {
     const client = makeClient(mockFetch, null);
     await expect(call(client)).rejects.toThrow(AuthError);
     await expect(call(client)).rejects.toMatchObject({
-      message: 'No Forms API key configured.',
+      message: 'No Forms API key is stored.',
       suggestion: expect.stringContaining('paubox auth set-forms-key'),
     });
     expect(mockFetch).not.toHaveBeenCalled();

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import type { Command } from 'commander';
 import { FormsApiClient } from '../lib/forms-api';
 import * as credentials from '../lib/credentials';
-import { ConfigError } from '../lib/errors';
+import { ConfigError, ValidationError } from '../lib/errors';
 import { writeExportFile } from '../lib/file-write';
 import { printJson, printSuccess, printInfo } from '../lib/output';
 import type {
@@ -19,14 +19,14 @@ const ORDER_DIRECTIONS = ['asc', 'desc'] as const;
 
 function parseIntStrict(value: string, optionName: string): number {
   if (!/^-?\d+$/.test(value)) {
-    throw new ConfigError(`${optionName} must be an integer. Got "${value}".`);
+    throw new ValidationError(`${optionName} must be an integer. Got "${value}".`);
   }
   return parseInt(value, 10);
 }
 
 function parseBoolStrict(value: string, optionName: string): boolean {
   if (value !== 'true' && value !== 'false') {
-    throw new ConfigError(`${optionName} must be "true" or "false". Got "${value}".`);
+    throw new ValidationError(`${optionName} must be "true" or "false". Got "${value}".`);
   }
   return value === 'true';
 }
@@ -37,7 +37,7 @@ function parseChoice<T extends string>(
   allowed: readonly T[],
 ): T {
   if (!(allowed as readonly string[]).includes(value)) {
-    throw new ConfigError(
+    throw new ValidationError(
       `${optionName} must be one of: ${allowed.join(', ')}. Got "${value}".`,
     );
   }
@@ -59,7 +59,7 @@ function readJsonFile(filePath: string, optionName: string): unknown {
   try {
     return JSON.parse(raw);
   } catch {
-    throw new ConfigError(`${optionName} "${filePath}" is not valid JSON.`);
+    throw new ValidationError(`${optionName} "${filePath}" is not valid JSON.`);
   }
 }
 
