@@ -34,7 +34,7 @@ export function createProgram(): Command {
     .version(readPackageVersion(), '-v, --version')
     .option('--json', 'Output as JSON')
     .option('-q, --quiet', 'Suppress non-essential output')
-    .option('--timeout <seconds>', 'Per-request timeout in seconds (default 30)')
+    .option('--timeout <seconds>', 'Per-request timeout in seconds (default: 30, plus upload time for large sends)')
     .configureOutput({
       writeErr: (str) => process.stderr.write(str),
     });

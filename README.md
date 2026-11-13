@@ -408,7 +408,7 @@ These flags work with any command:
 |------|-------------|
 | `--json` | Output result as JSON (useful for scripting). Errors are written to stderr as JSON too. |
 | `-q, --quiet` | Suppress non-essential output |
-| `--timeout <seconds>` | Per-request timeout. Defaults to 30 seconds. |
+| `--timeout <seconds>` | Per-request timeout. Defaults to 30 seconds, plus upload time for large sends (budgeted at 256 KB/s, so a 250 MB send gets about 17 minutes). An explicit value, or `PAUBOX_TIMEOUT`, is used exactly. |
 | `-v, --version` | Print version |
 | `--help` | Show help |
 

@@ -1,10 +1,13 @@
 import {
+  ASSUMED_UPLOAD_BYTES_PER_SECOND,
+  DEFAULT_TIMEOUT_MS,
   HttpClient,
   clientHeaders,
   describeNetworkError,
   newRequestId,
   setClientCommand,
   setTimeoutSeconds,
+  timeoutForRequest,
   userAgent,
 } from '../../src/lib/http';
 import { ApiError, AuthError, ExitCode, NetworkError } from '../../src/lib/errors';
@@ -95,13 +98,85 @@ describe('describeNetworkError', () => {
     expect(err.suggestion).toContain('--timeout');
   });
 
+  // A timed-out send may already have been delivered; "retry" would invite a duplicate.
+  it('tells the user to check before retrying a timed-out send', () => {
+    const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+    const err = describeNetworkError(timeout, url, 45_000, { idempotent: false });
+    expect(err.suggestion).toContain('Check before retrying');
+    expect(err.suggestion).not.toMatch(/^Retry/);
+  });
+
+  it('still suggests a retry for a timed-out read', () => {
+    const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+    const err = describeNetworkError(timeout, url, 45_000, { idempotent: true });
+    expect(err.suggestion).toMatch(/^Retry/);
+  });
+
   it('still says something useful for an unrecognised cause', () => {
     const err = describeNetworkError(new TypeError('fetch failed'), url, 30_000);
     expect(err.message).toContain('Could not reach api.paubox.com');
   });
 });
 
+describe('timeoutForRequest', () => {
+  const MB = 1024 * 1024;
+
+  it('uses the 30s base for a request without a body', () => {
+    expect(timeoutForRequest(undefined, null)).toBe(DEFAULT_TIMEOUT_MS);
+  });
+
+  // 2.0.0 had no timeout, so a flat 30s would break large sends that used to work.
+  it('adds upload time for a large body so a 250 MB send is not cut off', () => {
+    const body = 'x'.repeat(250 * MB);
+    const ms = timeoutForRequest(body, null);
+    expect(ms).toBe(DEFAULT_TIMEOUT_MS + Math.ceil(((250 * MB) / ASSUMED_UPLOAD_BYTES_PER_SECOND) * 1000));
+    expect(ms).toBeGreaterThan(15 * 60 * 1000);
+  });
+
+  it('measures byte length, not string length', () => {
+    // 'é' is 2 bytes in UTF-8.
+    expect(timeoutForRequest('é'.repeat(MB), null)).toBe(timeoutForRequest('x'.repeat(2 * MB), null));
+  });
+
+  it('measures binary bodies', () => {
+    expect(timeoutForRequest(new Uint8Array(2 * MB), null)).toBe(timeoutForRequest('x'.repeat(2 * MB), null));
+  });
+
+  it('honours an explicit limit exactly, even for a large body', () => {
+    expect(timeoutForRequest('x'.repeat(50 * MB), 10_000)).toBe(10_000);
+  });
+
+  it('reads --timeout, then PAUBOX_TIMEOUT, as the explicit limit', () => {
+    process.env.PAUBOX_TIMEOUT = '12';
+    expect(timeoutForRequest('x'.repeat(10 * MB))).toBe(12_000);
+    setTimeoutSeconds(7);
+    expect(timeoutForRequest('x'.repeat(10 * MB))).toBe(7_000);
+  });
+
+  it('falls back to the scaled default when PAUBOX_TIMEOUT is malformed', () => {
+    process.env.PAUBOX_TIMEOUT = 'soon';
+    expect(timeoutForRequest(undefined)).toBe(DEFAULT_TIMEOUT_MS);
+  });
+});
+
 describe('HttpClient', () => {
+  it('applies the size-scaled timeout to the request it sends', async () => {
+    const spy = jest.spyOn(AbortSignal, 'timeout');
+    const fetchFn = jest.fn().mockResolvedValue(fakeResponse(200, {}));
+    const body = 'x'.repeat(5 * 1024 * 1024);
+    await client(fetchFn).request('https://x.test/a', { method: 'POST', body }, { operation: 'Send email' });
+    expect(spy).toHaveBeenCalledWith(timeoutForRequest(body, null));
+    spy.mockRestore();
+  });
+
+  it('labels a timed-out POST as possibly delivered', async () => {
+    const fetchFn = jest.fn().mockRejectedValue(Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+    await expect(
+      client(fetchFn).request('https://x.test/a', { method: 'POST', body: '{}' }, { operation: 'Send email' }),
+    ).rejects.toMatchObject({ suggestion: expect.stringContaining('Check before retrying') });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('returns the response unchanged on success', async () => {
     const fetchFn = jest.fn().mockResolvedValue(fakeResponse(200, { ok: true }));
     const response = await client(fetchFn).request('https://x.test/a', {}, { operation: 'Probe' });
