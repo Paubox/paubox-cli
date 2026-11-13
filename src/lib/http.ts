@@ -77,15 +77,43 @@ export function setTimeoutSeconds(seconds: number): void {
   timeoutOverrideMs = Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1000) : null;
 }
 
-function resolveTimeout(): number {
+/**
+ * The upload rate the default timeout budgets for: a slow office uplink
+ * (256 KB/s, about 2 Mbps). A 250 MB send gets about 17 minutes on top of the
+ * base, so the default never cuts off an upload that is actually progressing.
+ */
+export const ASSUMED_UPLOAD_BYTES_PER_SECOND = 256 * 1024;
+
+/** The user's explicit limit (--timeout, then PAUBOX_TIMEOUT), or null for the default. */
+function explicitTimeoutMs(): number | null {
   if (timeoutOverrideMs !== null) return timeoutOverrideMs;
   const raw = process.env.PAUBOX_TIMEOUT?.trim();
-  if (!raw) return DEFAULT_TIMEOUT_MS;
+  if (!raw) return null;
   const seconds = Number(raw);
   // A malformed override falls back to the default rather than failing the
   // command: a bad env var should not be the reason a send does not go out.
-  if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_TIMEOUT_MS;
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
   return Math.round(seconds * 1000);
+}
+
+function bodyBytes(body: RequestInit['body']): number {
+  if (typeof body === 'string') return Buffer.byteLength(body);
+  if (body instanceof ArrayBuffer) return body.byteLength;
+  if (ArrayBuffer.isView(body)) return body.byteLength;
+  return 0;
+}
+
+/**
+ * The timeout for one request.
+ *
+ * An explicit limit is honoured exactly. The default is a flat base plus the
+ * time the body needs at a slow upload rate: a flat 30s would cut off large
+ * attachment sends that 2.0.0 (which had no timeout) delivered, and a send
+ * aborted after the server already accepted it invites a duplicate on retry.
+ */
+export function timeoutForRequest(body: RequestInit['body'], explicitMs: number | null = explicitTimeoutMs()): number {
+  if (explicitMs !== null) return explicitMs;
+  return DEFAULT_TIMEOUT_MS + Math.ceil((bodyBytes(body) / ASSUMED_UPLOAD_BYTES_PER_SECOND) * 1000);
 }
 
 function debugEnabled(): boolean {
@@ -124,14 +152,27 @@ function causeMessage(err: unknown): string {
  * Node's fetch reports every transport failure as `TypeError: fetch failed` and
  * hides the reason in `cause`, so without this the user is told nothing at all.
  */
-export function describeNetworkError(err: unknown, url: string, timeoutMs: number): NetworkError {
+export function describeNetworkError(
+  err: unknown,
+  url: string,
+  timeoutMs: number,
+  opts: { idempotent?: boolean } = {},
+): NetworkError {
   const host = safeHost(url);
 
   if (err instanceof Error && err.name === 'TimeoutError') {
+    // A send that timed out may still have been accepted: the upload can finish
+    // and the server process it after the client gave up. Saying "retry" there
+    // invites a duplicate email, so say "check first" instead.
+    const suggestion =
+      opts.idempotent === false
+        ? 'The server may still have accepted this request, for example sent the email. ' +
+          'Check before retrying so it is not sent twice. To allow longer, use --timeout <seconds> or PAUBOX_TIMEOUT.'
+        : 'Retry, or raise the limit with --timeout <seconds> or PAUBOX_TIMEOUT. ' +
+          'Large attachments on a slow link are the usual cause.';
     return new NetworkError(
       `Request to ${host} timed out after ${Math.round(timeoutMs / 1000)}s.`,
-      'Retry, or raise the limit with --timeout <seconds> or PAUBOX_TIMEOUT. ' +
-        'Large attachments on a slow link are the usual cause.',
+      suggestion,
       'ETIMEDOUT',
     );
   }
@@ -225,11 +266,9 @@ export interface HttpClientConfig {
  */
 export class HttpClient {
   private readonly fetchFn: FetchFn;
-  private readonly timeoutMs: number;
 
   constructor(private readonly config: HttpClientConfig) {
     this.fetchFn = config.fetchFn ?? globalThis.fetch;
-    this.timeoutMs = config.timeoutMs ?? resolveTimeout();
   }
 
   /**
@@ -241,6 +280,7 @@ export class HttpClient {
     const requestId = newRequestId();
     const method = (init.method ?? 'GET').toUpperCase();
     const idempotent = ctx.idempotent ?? method === 'GET';
+    const timeoutMs = timeoutForRequest(init.body, this.config.timeoutMs ?? explicitTimeoutMs());
 
     const headers: Record<string, string> = {
       ...clientHeaders(requestId),
@@ -265,10 +305,10 @@ export class HttpClient {
         response = await this.fetchFn(url, {
           ...init,
           headers,
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (err) {
-        const netError = describeNetworkError(err, url, this.timeoutMs);
+        const netError = describeNetworkError(err, url, timeoutMs, { idempotent });
         netError.requestId = requestId;
         debug(`transport failure: ${netError.code ?? 'unknown'} after ${Date.now() - started}ms`);
         if (idempotent && netError.code !== undefined && RETRYABLE_CODES.has(netError.code)) {
