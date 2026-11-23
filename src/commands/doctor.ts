@@ -73,9 +73,14 @@ function credentialCheck(
   name: string,
   key: string | undefined,
   hint: string,
+  envName?: string,
 ): Check {
   return key
-    ? { name, status: 'ok', detail: `stored (${credentials.maskApiKey(key)})` }
+    ? {
+        name,
+        status: 'ok',
+        detail: `${envName ? `from ${envName}` : 'stored'} (${credentials.maskApiKey(key)})`,
+      }
     : { name, status: 'warn', detail: `not set — ${hint}` };
 }
 
@@ -100,13 +105,30 @@ export function registerDoctorCommand(program: Command): void {
       ];
 
       let creds: Awaited<ReturnType<typeof credentials.loadCredentials>> = null;
+      const env = credentials.envCredentials();
       try {
         creds = await credentials.loadCredentials();
-        checks.push({
-          name: 'credential store',
-          status: 'ok',
-          detail: credentials.usingKeychain() ? 'OS keychain' : 'config file',
-        });
+        const keychainProblem = credentials.keychainUnavailableReason();
+        if (env.apiKey && env.formsApiKey) {
+          checks.push({ name: 'credential store', status: 'ok', detail: 'not used (keys set in the environment)' });
+        } else if (keychainProblem) {
+          // Commands still work from the config file, so this is a warning with
+          // the fix, not the raw libsecret error as a failure.
+          checks.push({
+            name: 'credential store',
+            status: 'warn',
+            detail:
+              `config file (OS keychain unavailable: ${keychainProblem}). ` +
+              `Normal on headless machines such as Docker, CI and WSL; ` +
+              `set ${credentials.API_KEY_ENV} to skip the keychain entirely`,
+          });
+        } else {
+          checks.push({
+            name: 'credential store',
+            status: 'ok',
+            detail: credentials.usingKeychain() ? 'OS keychain' : 'config file',
+          });
+        }
       } catch (err) {
         checks.push({
           name: 'credential store',
@@ -116,8 +138,18 @@ export function registerDoctorCommand(program: Command): void {
       }
 
       checks.push(
-        credentialCheck('Email API key', creds?.apiKey, 'run `paubox auth login`'),
-        credentialCheck('Forms API key', creds?.formsApiKey, 'run `paubox auth set-forms-key`'),
+        credentialCheck(
+          'Email API key',
+          creds?.apiKey,
+          `run \`paubox auth login\` or set ${credentials.API_KEY_ENV}`,
+          env.apiKey ? credentials.API_KEY_ENV : undefined,
+        ),
+        credentialCheck(
+          'Forms API key',
+          creds?.formsApiKey,
+          `run \`paubox auth set-forms-key\` or set ${credentials.FORMS_API_KEY_ENV}`,
+          env.formsApiKey ? credentials.FORMS_API_KEY_ENV : undefined,
+        ),
       );
 
       // A bad base-URL override is a common and silent cause of "nothing works".

@@ -11,6 +11,7 @@ const MockPauboxApiClient = PauboxApiClient as jest.MockedClass<typeof PauboxApi
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCredentials.envCredentials.mockReturnValue({});
 });
 
 describe('paubox auth status', () => {
@@ -209,11 +210,26 @@ describe('paubox auth status', () => {
   });
 });
 
+describe('paubox auth status with environment keys', () => {
+  it('says the key comes from PAUBOX_API_KEY', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
+    mockCredentials.envCredentials.mockReturnValue({ apiKey: 'sekret' });
+    mockCredentials.maskApiKey.mockReturnValue('****ret');
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('from PAUBOX_API_KEY');
+    writeSpy.mockRestore();
+  });
+});
+
 describe('paubox auth set-forms-key', () => {
   it('saves the forms key standalone with an empty apiKey when no creds exist', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
-    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.loadStoredCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
@@ -235,7 +251,7 @@ describe('paubox auth set-forms-key', () => {
   it('preserves the existing apiKey when saving the forms key', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
-    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
+    mockCredentials.loadStoredCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
@@ -252,7 +268,7 @@ describe('paubox auth set-forms-key', () => {
   it('trims whitespace from the entered key', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('  forms-key-9876  ');
-    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.loadStoredCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
@@ -279,7 +295,7 @@ describe('paubox auth set-forms-key', () => {
   it('outputs JSON shape with --json flag', async () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
-    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.loadStoredCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
@@ -313,7 +329,7 @@ describe('paubox auth login', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('new-sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue({
+    mockCredentials.loadStoredCredentials.mockResolvedValue({
       apiKey: 'old-sekret',
       formsApiKey: 'forms-key-9876',
     });
@@ -335,7 +351,7 @@ describe('paubox auth login', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.loadStoredCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
@@ -353,7 +369,7 @@ describe('paubox auth login', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.loadStoredCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
@@ -370,7 +386,7 @@ describe('paubox auth login', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
-    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.loadStoredCredentials.mockResolvedValue(null);
     mockCredentials.saveCredentials.mockResolvedValue();
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);

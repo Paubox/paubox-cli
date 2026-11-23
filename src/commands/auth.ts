@@ -30,7 +30,7 @@ export function registerAuthCommands(program: Command): void {
           throw AuthError.invalid('email');
         }
 
-        const existing = await credentials.loadCredentials();
+        const existing = await credentials.loadStoredCredentials();
         await credentials.saveCredentials({
           apiKey: apiKey.trim(),
           ...(existing?.formsApiKey ? { formsApiKey: existing.formsApiKey } : {}),
@@ -69,7 +69,7 @@ export function registerAuthCommands(program: Command): void {
 
         // Build the object explicitly (no spread) so legacy fields from
         // pre-key-only stored blobs are dropped rather than re-persisted.
-        const existing = await credentials.loadCredentials();
+        const existing = await credentials.loadStoredCredentials();
         await credentials.saveCredentials({
           apiKey: existing?.apiKey ?? '',
           formsApiKey: formsApiKey.trim(),
@@ -124,32 +124,39 @@ export function registerAuthCommands(program: Command): void {
         return;
       }
 
-      const storage = credentials.usingKeychain() ? 'OS keychain' : 'config file';
+      const stored = credentials.usingKeychain() ? 'OS keychain' : 'config file';
+      const env = credentials.envCredentials();
+      const apiKeySource = env.apiKey ? 'environment' : stored;
+      const formsKeySource = env.formsApiKey ? 'environment' : stored;
+      const apiKeyWhere = env.apiKey ? `from ${credentials.API_KEY_ENV}` : `stored in ${stored}`;
+      const formsKeyWhere = env.formsApiKey
+        ? `from ${credentials.FORMS_API_KEY_ENV}`
+        : `stored in ${stored}`;
       if (opts.json) {
         if (emailAuthenticated) {
           printJson({
             authenticated: true,
             apiKey: credentials.maskApiKey(creds.apiKey),
             formsApiKey: maskedFormsKey,
-            storage,
+            storage: apiKeySource,
           });
         } else {
-          printJson({ authenticated: false, formsApiKey: maskedFormsKey, storage });
+          printJson({ authenticated: false, formsApiKey: maskedFormsKey, storage: formsKeySource });
         }
         return;
       }
 
       if (emailAuthenticated) {
         const masked = credentials.maskApiKey(creds.apiKey);
-        printSuccess(`Authenticated (API key: ${masked}, stored in ${storage})`, opts);
+        printSuccess(`Authenticated (API key: ${masked}, ${apiKeyWhere})`, opts);
         if (maskedFormsKey) {
-          printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
+          printSuccess(`Forms API key: ${maskedFormsKey} (${formsKeyWhere})`, opts);
         } else {
           printInfo('Forms API key: not set. Run `paubox auth set-forms-key`.', opts);
         }
       } else {
         printInfo('Email API: not authenticated. Run `paubox auth login`.', opts);
-        printSuccess(`Forms API key: ${maskedFormsKey} (stored in ${storage})`, opts);
+        printSuccess(`Forms API key: ${maskedFormsKey} (${formsKeyWhere})`, opts);
       }
     });
 }

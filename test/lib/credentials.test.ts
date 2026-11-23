@@ -11,7 +11,17 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
   jest.restoreAllMocks();
+  delete process.env.PAUBOX_API_KEY;
+  delete process.env.PAUBOX_FORMS_API_KEY;
 });
+
+const DBUS_ERROR = 'Cannot autolaunch D-Bus without X11 $DISPLAY';
+
+/** keytar as it behaves on a headless Linux box: installed, but every call throws. */
+function brokenKeytar() {
+  const fail = jest.fn().mockRejectedValue(new Error(DBUS_ERROR));
+  return { setPassword: fail, getPassword: fail, deletePassword: fail };
+}
 
 type CredsModule = typeof import('../../src/lib/credentials');
 
@@ -231,6 +241,106 @@ describe('credentials (keytar available)', () => {
       const loaded = await creds.loadCredentials();
       expect(loaded).toEqual(expect.objectContaining({ apiKey: 'k' }));
       expect(loaded?.formsApiKey).toBeUndefined();
+    });
+  });
+});
+
+describe('credentials (keytar installed but the keychain throws)', () => {
+  it('saves to the config file instead of failing', async () => {
+    const keytar = brokenKeytar();
+    await withCreds(() => keytar, async (creds) => {
+      await creds.saveCredentials({ apiKey: 'k' });
+      const file = JSON.parse(fs.readFileSync(path.join(tmpDir, 'config.json'), 'utf8'));
+      expect(file.credentials).toEqual({ apiKey: 'k' });
+      expect(creds.usingKeychain()).toBe(false);
+      expect(creds.keychainUnavailableReason()).toBe(DBUS_ERROR);
+    });
+  });
+
+  it('loads from the config file instead of failing', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ credentials: { apiKey: 'filekey' } }));
+    await withCreds(() => brokenKeytar(), async (creds) => {
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'filekey' });
+    });
+  });
+
+  it('returns null rather than throwing when nothing is stored anywhere', async () => {
+    await withCreds(() => brokenKeytar(), async (creds) => {
+      await expect(creds.loadCredentials()).resolves.toBeNull();
+    });
+  });
+
+  it('stops calling the keychain after the first failure', async () => {
+    const keytar = brokenKeytar();
+    await withCreds(() => keytar, async (creds) => {
+      await creds.loadCredentials();
+      await creds.loadCredentials();
+      expect(keytar.getPassword).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('clears the config file on logout', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ credentials: { apiKey: 'filekey' } }));
+    await withCreds(() => brokenKeytar(), async (creds) => {
+      await creds.clearCredentials();
+      expect(await creds.loadCredentials()).toBeNull();
+    });
+  });
+
+  it('reads the config file when the keychain works but is empty', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ credentials: { apiKey: 'filekey' } }));
+    const keytar = { setPassword: jest.fn(), getPassword: jest.fn().mockResolvedValue(null), deletePassword: jest.fn() };
+    await withCreds(() => keytar, async (creds) => {
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'filekey' });
+    });
+  });
+});
+
+describe('credentials from the environment', () => {
+  it('uses PAUBOX_API_KEY over the stored key', async () => {
+    process.env.PAUBOX_API_KEY = ' envkey ';
+    await withCreds(null, async (creds) => {
+      await creds.saveCredentials({ apiKey: 'stored', formsApiKey: 'storedforms' });
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'envkey', formsApiKey: 'storedforms' });
+    });
+  });
+
+  it('works with no stored credentials at all', async () => {
+    process.env.PAUBOX_API_KEY = 'envkey';
+    await withCreds(() => brokenKeytar(), async (creds) => {
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'envkey' });
+    });
+  });
+
+  it('does not touch the keychain when both keys are in the environment', async () => {
+    process.env.PAUBOX_API_KEY = 'envkey';
+    process.env.PAUBOX_FORMS_API_KEY = 'envforms';
+    const keytar = brokenKeytar();
+    await withCreds(() => keytar, async (creds) => {
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'envkey', formsApiKey: 'envforms' });
+      expect(keytar.getPassword).not.toHaveBeenCalled();
+    });
+  });
+
+  it('supplies only a forms key, leaving the stored email key in place', async () => {
+    process.env.PAUBOX_FORMS_API_KEY = 'envforms';
+    await withCreds(null, async (creds) => {
+      await creds.saveCredentials({ apiKey: 'stored' });
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'stored', formsApiKey: 'envforms' });
+    });
+  });
+
+  it('ignores an empty variable', async () => {
+    process.env.PAUBOX_API_KEY = '  ';
+    await withCreds(null, async (creds) => {
+      expect(await creds.loadCredentials()).toBeNull();
+    });
+  });
+
+  it('keeps environment keys out of loadStoredCredentials', async () => {
+    process.env.PAUBOX_API_KEY = 'envkey';
+    await withCreds(null, async (creds) => {
+      expect(await creds.loadStoredCredentials()).toBeNull();
     });
   });
 });

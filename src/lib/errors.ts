@@ -95,11 +95,13 @@ export class AuthError extends PauboxError {
     return what === 'email'
       ? new AuthError(
           'No Paubox API key is stored.',
-          'Run `paubox auth login` and paste an Email API key from the Paubox dashboard.',
+          'Run `paubox auth login` and paste an Email API key from the Paubox dashboard, ' +
+            'or set PAUBOX_API_KEY (for CI, containers and other headless machines).',
         )
       : new AuthError(
           'No Forms API key is stored.',
-          'Run `paubox auth set-forms-key` with a scoped API key that carries the "forms" scope.',
+          'Run `paubox auth set-forms-key` with a scoped API key that carries the "forms" scope, ' +
+            'or set PAUBOX_FORMS_API_KEY.',
         );
   }
 

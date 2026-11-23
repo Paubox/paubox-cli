@@ -66,7 +66,9 @@ paubox auth logout         # Remove stored credentials (including the Forms API 
 paubox auth status         # Show current authentication state
 ```
 
-Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to a local config file (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows).
+Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to a local config file (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows). That includes a keychain that is installed but cannot be reached, as on a Linux machine with no display (Docker, CI, WSL); `paubox doctor` reports when this happens.
+
+In CI and containers, skip stored credentials entirely by setting `PAUBOX_API_KEY` (and `PAUBOX_FORMS_API_KEY` for the forms and webhooks commands). A key set in the environment takes precedence over the stored one, and `paubox auth status` shows where each key came from.
 
 #### Forms API key
 
@@ -495,6 +497,8 @@ accepted is reported rather than repeated.
 
 | Variable | Description |
 |----------|-------------|
+| `PAUBOX_API_KEY` | Email API key. Overrides the stored key and needs no keychain or `paubox auth login`, so use it in CI, Docker and other headless environments. |
+| `PAUBOX_FORMS_API_KEY` | Forms API key (scoped key with the `forms` scope). Overrides the stored Forms key. |
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
 | `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
 | `PAUBOX_TIMEOUT` | Per-request timeout in seconds. Defaults to `30`. `--timeout` takes precedence. |

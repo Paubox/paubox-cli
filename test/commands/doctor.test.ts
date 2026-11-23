@@ -7,6 +7,8 @@ jest.mock('../../src/lib/credentials', () => ({
   ...jest.requireActual('../../src/lib/credentials'),
   loadCredentials: jest.fn(),
   usingKeychain: jest.fn(() => false),
+  keychainUnavailableReason: jest.fn(() => null),
+  envCredentials: jest.fn(() => ({})),
 }));
 
 const mockCredentials = credentials as jest.Mocked<typeof credentials>;
@@ -130,6 +132,34 @@ describe('paubox doctor', () => {
     expect(checks['Email API']).toMatchObject({ status: 'fail' });
     expect(checks['Email API'].detail).toContain('unreachable');
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('paubox doctor credential store', () => {
+  beforeEach(() => {
+    answer({ message_receipt: 404, '/api/forms': 200, '/endpoints': 200 });
+  });
+
+  it('warns with the environment-variable hint when the keychain is unavailable', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'ek', formsApiKey: 'fk' });
+    mockCredentials.keychainUnavailableReason.mockReturnValue('Cannot autolaunch D-Bus without X11 $DISPLAY');
+
+    const checks = await runDoctor();
+
+    expect(checks['credential store']).toMatchObject({ status: 'warn' });
+    expect(checks['credential store'].detail).toContain('Cannot autolaunch D-Bus');
+    expect(checks['credential store'].detail).toContain('PAUBOX_API_KEY');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('reports keys supplied through the environment', async () => {
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'envkey1234' });
+    mockCredentials.envCredentials.mockReturnValue({ apiKey: 'envkey1234' });
+
+    const checks = await runDoctor();
+
+    expect(checks['Email API key'].detail).toBe('from PAUBOX_API_KEY (****1234)');
+    expect(checks['Forms API key'].detail).toContain('PAUBOX_FORMS_API_KEY');
   });
 });
 
