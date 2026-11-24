@@ -86,7 +86,7 @@ export function extractMessage(body: string): string | null {
 
   const obj = parsed as Record<string, unknown>;
 
-  // pb_webhooks: {"message": "..."} — and DRF: {"detail": "..."}
+  // pb_webhooks and pb_rforms: {"message": "..."}. {"detail"} and {"error"} are fallbacks.
   if (typeof obj.message === 'string' && obj.message !== '') return collapse(obj.message);
   if (typeof obj.detail === 'string' && obj.detail !== '') return collapse(obj.detail);
   if (typeof obj.error === 'string' && obj.error !== '') return collapse(obj.error);
@@ -98,7 +98,8 @@ export function extractMessage(body: string): string | null {
     if (parts.length > 0) return collapse([...new Set(parts)].join('; '));
   }
 
-  // DRF field errors: {"errors": {"email": ["is invalid"]}} — also seen at the top level.
+  // Field-error maps: {"errors": {"email": ["is invalid"]}}, or the same map at the top level.
+  // No current backend sends this; it is a fallback so a shape change degrades readably.
   const fieldSource =
     obj.errors !== undefined && typeof obj.errors === 'object' && obj.errors !== null
       ? (obj.errors as Record<string, unknown>)
