@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v2.1.0...paubox-cli-v2.1.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* work on machines with no keychain ([#67](https://github.com/Paubox/paubox-cli/issues/67)) ([9fb7c15](https://github.com/Paubox/paubox-cli/commit/9fb7c153666eaac47eaffe2d7b32ae2d5b42f932))
+
 ## [2.1.0](https://github.com/Paubox/paubox-cli/compare/paubox-cli-v2.0.0...paubox-cli-v2.1.0) (2026-11-13)
 
 
