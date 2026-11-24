@@ -102,16 +102,40 @@ export function registerDoctorCommand(program: Command): void {
       let creds: Awaited<ReturnType<typeof credentials.loadCredentials>> = null;
       try {
         creds = await credentials.loadCredentials();
-        checks.push({
-          name: 'credential store',
-          status: 'ok',
-          detail: credentials.usingKeychain() ? 'OS keychain' : 'config file',
-        });
+        const source = credentials.credentialSource();
+        const keychainError = credentials.keychainError();
+
+        if (keychainError) {
+          // The usual cause is a Linux container or SSH session with no
+          // session bus. It is a warning, not a failure: the file fallback
+          // works, and PAUBOX_API_KEY bypasses the keychain entirely.
+          checks.push({
+            name: 'credential store',
+            status: 'warn',
+            detail:
+              `config file (OS keychain unavailable: ${keychainError}). ` +
+              `Set ${credentials.ENV_API_KEY} / ${credentials.ENV_FORMS_API_KEY} ` +
+              'to skip the keychain on headless machines.',
+          });
+        } else {
+          checks.push({
+            name: 'credential store',
+            status: 'ok',
+            detail:
+              source === 'environment'
+                ? `environment (${credentials.ENV_API_KEY} / ${credentials.ENV_FORMS_API_KEY})`
+                : source === 'keychain'
+                  ? 'OS keychain'
+                  : 'config file',
+          });
+        }
       } catch (err) {
         checks.push({
           name: 'credential store',
           status: 'fail',
-          detail: err instanceof Error ? err.message : String(err),
+          detail:
+            `${err instanceof Error ? err.message : String(err)} — ` +
+            `set ${credentials.ENV_API_KEY} to bypass the credential store.`,
         });
       }
 

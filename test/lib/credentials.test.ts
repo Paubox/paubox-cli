@@ -246,3 +246,149 @@ describe('maskApiKey', () => {
     expect(maskApiKey('ab')).toBe('****');
   });
 });
+
+// keytar installs cleanly in a Linux container and then fails when it reaches
+// for a session bus. loadKeytar()'s try/catch only ever covered keytar being
+// absent, so this error escaped and took down every command — including the
+// ones whose credentials were sitting in the config file all along.
+const DBUS = 'Cannot autolaunch D-Bus without X11 $DISPLAY';
+
+const throwingKeytar = () => ({
+  getPassword: jest.fn(async () => { throw new Error(DBUS); }),
+  setPassword: jest.fn(async () => { throw new Error(DBUS); }),
+  deletePassword: jest.fn(async () => { throw new Error(DBUS); }),
+});
+
+describe('credentials (keytar present but throwing → headless)', () => {
+  it('does not throw, and falls back to the config file', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      const cs = await import('../../src/lib/config-store');
+      cs.saveCredentials({ apiKey: 'file-key-1234' });
+
+      const loaded = await creds.loadCredentials();
+
+      expect(loaded).toEqual({ apiKey: 'file-key-1234' });
+      expect(creds.credentialSource()).toBe('file');
+      expect(creds.keychainError()).toContain('D-Bus');
+    });
+  });
+
+  it('returns null rather than throwing when nothing is stored anywhere', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      await expect(creds.loadCredentials()).resolves.toBeNull();
+    });
+  });
+
+  // Without this there is no way to authenticate at all on a headless box:
+  // the config file the user would be told to use is only writable here.
+  it('saves to the config file and reports the downgrade', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      const result = await creds.saveCredentials({ apiKey: 'written-5678' });
+
+      expect(result.source).toBe('file');
+      expect(result.keychainError).toContain('D-Bus');
+
+      const cs = await import('../../src/lib/config-store');
+      expect(cs.getCredentials()).toEqual({ apiKey: 'written-5678' });
+    });
+  });
+
+  it('clears the file copy even though the keychain is unreachable', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      const cs = await import('../../src/lib/config-store');
+      cs.saveCredentials({ apiKey: 'to-be-cleared' });
+
+      await expect(creds.clearCredentials()).resolves.toBeUndefined();
+      expect(cs.getCredentials()).toBeNull();
+    });
+  });
+});
+
+// A working keychain that simply has no entry is not a reason to ignore the
+// config file — a fallback write may have put the credential there.
+describe('credentials (keychain reachable but empty)', () => {
+  it('falls through to the config file', async () => {
+    await withCreds(
+      () => ({
+        getPassword: jest.fn(async () => null),
+        setPassword: jest.fn(async () => undefined),
+        deletePassword: jest.fn(async () => true),
+      }),
+      async (creds) => {
+        const cs = await import('../../src/lib/config-store');
+        cs.saveCredentials({ apiKey: 'left-in-file' });
+
+        expect(await creds.loadCredentials()).toEqual({ apiKey: 'left-in-file' });
+        expect(creds.credentialSource()).toBe('file');
+      },
+    );
+  });
+});
+
+describe('credentials (environment)', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('reads PAUBOX_API_KEY without touching the keychain', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      process.env.PAUBOX_API_KEY = 'env-key-0001';
+
+      expect(await creds.loadCredentials()).toEqual({ apiKey: 'env-key-0001' });
+      expect(creds.credentialSource()).toBe('environment');
+    });
+  });
+
+  it('reads PAUBOX_FORMS_API_KEY', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      process.env.PAUBOX_FORMS_API_KEY = 'env-forms-0002';
+
+      const loaded = await creds.loadCredentials();
+      expect(loaded?.formsApiKey).toBe('env-forms-0002');
+    });
+  });
+
+  it('outranks a stored value', async () => {
+    await withCreds(
+      () => ({
+        getPassword: jest.fn(async () => JSON.stringify({ apiKey: 'stored' })),
+        setPassword: jest.fn(async () => undefined),
+        deletePassword: jest.fn(async () => true),
+      }),
+      async (creds) => {
+        process.env.PAUBOX_API_KEY = 'from-env';
+        expect((await creds.loadCredentials())?.apiKey).toBe('from-env');
+      },
+    );
+  });
+
+  // Overlaid per field, so one key from the environment and the other from the
+  // keychain is a working combination.
+  it('overlays only the key that is set', async () => {
+    await withCreds(
+      () => ({
+        getPassword: jest.fn(async () =>
+          JSON.stringify({ apiKey: 'stored-email', formsApiKey: 'stored-forms' }),
+        ),
+        setPassword: jest.fn(async () => undefined),
+        deletePassword: jest.fn(async () => true),
+      }),
+      async (creds) => {
+        process.env.PAUBOX_FORMS_API_KEY = 'env-forms';
+
+        expect(await creds.loadCredentials()).toEqual({
+          apiKey: 'stored-email',
+          formsApiKey: 'env-forms',
+        });
+      },
+    );
+  });
+
+  it('ignores blank and whitespace-only values', async () => {
+    await withCreds(throwingKeytar, async (creds) => {
+      process.env.PAUBOX_API_KEY = '   ';
+      expect(await creds.loadCredentials()).toBeNull();
+    });
+  });
+});

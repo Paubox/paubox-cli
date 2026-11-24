@@ -11,6 +11,9 @@ const MockPauboxApiClient = PauboxApiClient as jest.MockedClass<typeof PauboxApi
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Null per key by default, so these tests keep exercising the overall
+  // source they already set via credentialSource().
+  mockCredentials.credentialSources.mockReturnValue({ apiKey: null, formsApiKey: null });
 });
 
 describe('paubox auth status', () => {
@@ -51,6 +54,7 @@ describe('paubox auth status', () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockReturnValue('****ret');
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
@@ -65,6 +69,7 @@ describe('paubox auth status', () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockReturnValue('****ret');
     mockCredentials.usingKeychain.mockReturnValue(true);
+    mockCredentials.credentialSource.mockReturnValue('keychain');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
@@ -80,6 +85,7 @@ describe('paubox auth status', () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
+    mockCredentials.credentialSource.mockReturnValue('keychain');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
@@ -101,6 +107,7 @@ describe('paubox auth status', () => {
     });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
@@ -111,6 +118,8 @@ describe('paubox auth status', () => {
       apiKey: '****kret',
       formsApiKey: '****9876',
       storage: 'config file',
+      // Reported separately: the two keys can come from different stores.
+      formsStorage: 'config file',
     });
     writeSpy.mockRestore();
   });
@@ -124,6 +133,7 @@ describe('paubox auth status', () => {
     } as never);
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
@@ -134,6 +144,8 @@ describe('paubox auth status', () => {
       apiKey: '****kret',
       formsApiKey: '****9876',
       storage: 'config file',
+      // Reported separately: the two keys can come from different stores.
+      formsStorage: 'config file',
     });
     expect(parsed).not.toHaveProperty('apiUsername');
     writeSpy.mockRestore();
@@ -146,6 +158,7 @@ describe('paubox auth status', () => {
     });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
@@ -160,6 +173,7 @@ describe('paubox auth status', () => {
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
@@ -177,6 +191,7 @@ describe('paubox auth status', () => {
     });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
@@ -195,6 +210,7 @@ describe('paubox auth status', () => {
     });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
+    mockCredentials.credentialSource.mockReturnValue('keychain');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
@@ -214,9 +230,10 @@ describe('paubox auth set-forms-key', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
     mockCredentials.loadCredentials.mockResolvedValue(null);
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'file' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
@@ -236,9 +253,10 @@ describe('paubox auth set-forms-key', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
     mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'keychain' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
+    mockCredentials.credentialSource.mockReturnValue('keychain');
     jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
@@ -253,9 +271,10 @@ describe('paubox auth set-forms-key', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('  forms-key-9876  ');
     mockCredentials.loadCredentials.mockResolvedValue(null);
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'file' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'set-forms-key']);
@@ -280,9 +299,10 @@ describe('paubox auth set-forms-key', () => {
     const { password } = await import('@inquirer/prompts');
     (password as jest.Mock).mockResolvedValue('forms-key-9876');
     mockCredentials.loadCredentials.mockResolvedValue(null);
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'keychain' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
+    mockCredentials.credentialSource.mockReturnValue('keychain');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'set-forms-key']);
@@ -317,9 +337,10 @@ describe('paubox auth login', () => {
       apiKey: 'old-sekret',
       formsApiKey: 'forms-key-9876',
     });
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'file' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
@@ -336,9 +357,10 @@ describe('paubox auth login', () => {
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
     mockCredentials.loadCredentials.mockResolvedValue(null);
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'file' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
@@ -354,9 +376,10 @@ describe('paubox auth login', () => {
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
     mockCredentials.loadCredentials.mockResolvedValue(null);
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'file' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(false);
+    mockCredentials.credentialSource.mockReturnValue('file');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', 'auth', 'login']);
@@ -371,9 +394,10 @@ describe('paubox auth login', () => {
     (password as jest.Mock).mockResolvedValue('sekret');
     MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
     mockCredentials.loadCredentials.mockResolvedValue(null);
-    mockCredentials.saveCredentials.mockResolvedValue();
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'keychain' });
     mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
     mockCredentials.usingKeychain.mockReturnValue(true);
+    mockCredentials.credentialSource.mockReturnValue('keychain');
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login']);

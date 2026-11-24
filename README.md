@@ -495,10 +495,40 @@ accepted is reported rather than repeated.
 
 | Variable | Description |
 |----------|-------------|
+| `PAUBOX_API_KEY` | Email API key. Takes precedence over anything stored, and needs no keychain — this is how to authenticate on a headless machine. |
+| `PAUBOX_FORMS_API_KEY` | Scoped API key used by `paubox forms` and `paubox webhooks`. Same precedence. |
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
 | `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
 | `PAUBOX_TIMEOUT` | Per-request timeout in seconds. Defaults to `30`. `--timeout` takes precedence. |
 | `PAUBOX_DEBUG` | Set to `1` to log each request's method, URL, status, timing and request ID to stderr. Credentials are never logged. |
+
+### Running without a keychain
+
+By default the CLI stores credentials in the OS keychain, falling back to
+`~/.config/paubox/config.json` when that is unavailable. On a machine with no
+desktop session — a Linux container, CI, SSH, WSL — the keychain cannot be
+reached and `keytar` reports:
+
+```
+Cannot autolaunch D-Bus without X11 $DISPLAY
+```
+
+The CLI falls back to the config file on its own when that happens, and
+`paubox doctor` reports it as a warning rather than a failure. For an
+environment with no writable config either, or where you would rather not
+write a key to disk at all, set the keys directly:
+
+```bash
+export PAUBOX_API_KEY=your-email-api-key
+export PAUBOX_FORMS_API_KEY=your-scoped-api-key
+
+paubox send --to someone@example.com --subject Hi --text "..."
+paubox webhooks list
+```
+
+Environment keys outrank stored ones and are read per key, so one can come from
+the environment while the other stays in the keychain. `paubox auth status`
+shows where each one came from.
 
 These point the `paubox forms` commands at a non-production environment without
 patching and rebuilding:
