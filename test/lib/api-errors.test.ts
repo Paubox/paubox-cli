@@ -22,13 +22,13 @@ describe('extractMessage', () => {
     );
   });
 
-  it('reads the pb_webhooks {message} envelope', () => {
+  it('reads the pb_webhooks / pb_rforms {message} envelope', () => {
     expect(extractMessage(JSON.stringify({ message: 'target_url must be https' }))).toBe(
       'target_url must be https',
     );
   });
 
-  it('reads DRF field errors', () => {
+  it('reads field-error maps', () => {
     const body = JSON.stringify({ errors: { email: ['is invalid', 'is required'] } });
     expect(extractMessage(body)).toBe('email: is invalid, is required');
   });
