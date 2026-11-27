@@ -3,6 +3,28 @@ export interface PauboxCredentials {
   formsApiKey?: string;
 }
 
+/**
+ * A Paubox user session from `paubox auth login` in the browser: an IAM session
+ * token minted for this CLI, separate from the browser's own session. It acts as
+ * the person, so it is stored apart from the API keys and never sent to the
+ * key-authenticated APIs.
+ */
+export interface UserSession {
+  token: string;
+  /** `production`, `staging`, or `custom` when either URL was overridden. */
+  environment: string;
+  webUrl: string;
+  iamUrl: string;
+  email: string;
+  userId: number;
+  customerId: number | null;
+  customerName: string | null;
+  /** ISO 8601, from the token's `exp` claim. */
+  expiresAt: string;
+  /** ISO 8601. */
+  createdAt: string;
+}
+
 export interface SendEmailOptions {
   to: string[];
   from: string;

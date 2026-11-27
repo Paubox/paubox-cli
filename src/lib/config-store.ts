@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { ConfigData, PauboxCredentials } from '../types';
+import type { ConfigData, PauboxCredentials, UserSession } from '../types';
 
 interface StorageFile {
   credentials?: PauboxCredentials;
+  session?: UserSession;
   config?: ConfigData;
 }
 
@@ -58,6 +59,23 @@ export function saveCredentials(creds: PauboxCredentials): void {
 export function clearCredentials(): void {
   const data = readFile();
   delete data.credentials;
+  writeFile(data);
+}
+
+export function getSession(): UserSession | null {
+  return readFile().session ?? null;
+}
+
+export function saveSession(session: UserSession): void {
+  const data = readFile();
+  data.session = { ...session };
+  writeFile(data);
+}
+
+export function clearSession(): void {
+  const data = readFile();
+  if (!data.session) return;
+  delete data.session;
   writeFile(data);
 }
 

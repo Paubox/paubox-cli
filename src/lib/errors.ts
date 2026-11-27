@@ -108,11 +108,19 @@ export class AuthError extends PauboxError {
    * interchangeable and look identical in `auth status`, so name the mismatch
    * explicitly — it is the most common cause of a 401 here.
    */
-  static invalid(what: 'email' | 'forms' | 'webhooks', reason?: string | null): AuthError {
+  static invalid(what: 'email' | 'forms' | 'webhooks' | 'account', reason?: string | null): AuthError {
     // When the server says why (e.g. "Your Api Customer account has not been
     // activated"), show it: the key may be fine and the fix lies elsewhere.
     const withReason = (headline: string): string =>
       reason ? `${headline.replace(/\.$/, '')}: ${reason}` : headline;
+
+    if (what === 'account') {
+      return new AuthError(
+        withReason('Your Paubox login session has expired or was revoked.'),
+        'Run `paubox auth login` to log in again.',
+        401,
+      );
+    }
     // Only account-state reasons (not activated, under review) need support;
     // "Access token is missing…" is a key problem the user can fix.
     const accountNote = reason && /\baccount\b|activat|review/i.test(reason)

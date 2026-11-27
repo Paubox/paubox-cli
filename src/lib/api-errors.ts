@@ -1,6 +1,6 @@
 import { ApiError, AuthError, PauboxError } from './errors';
 
-export type ServiceName = 'email' | 'forms' | 'webhooks';
+export type ServiceName = 'email' | 'forms' | 'webhooks' | 'account';
 
 export interface ErrorContext {
   service: ServiceName;
