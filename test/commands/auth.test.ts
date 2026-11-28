@@ -1,13 +1,58 @@
 import { createProgram } from '../../src/index';
 import * as credentials from '../../src/lib/credentials';
 import { PauboxApiClient } from '../../src/lib/api';
+import { browserLogin } from '../../src/lib/browser-login';
+import { AuthError, NetworkError } from '../../src/lib/errors';
+import { IamClient } from '../../src/lib/iam-api';
+import type { UserSession } from '../../src/types';
 
 jest.mock('../../src/lib/credentials');
 jest.mock('../../src/lib/api');
+jest.mock('../../src/lib/browser-login');
+jest.mock('../../src/lib/iam-api');
 jest.mock('@inquirer/prompts');
 
 const mockCredentials = credentials as jest.Mocked<typeof credentials>;
 const MockPauboxApiClient = PauboxApiClient as jest.MockedClass<typeof PauboxApiClient>;
+const mockBrowserLogin = browserLogin as jest.MockedFunction<typeof browserLogin>;
+const MockIamClient = IamClient as jest.MockedClass<typeof IamClient>;
+
+const FUTURE = new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString();
+const PAST = new Date(Date.now() - 1000).toISOString();
+
+function session(overrides: Partial<UserSession> = {}): UserSession {
+  return {
+    token: 'session.jwt.token',
+    environment: 'staging',
+    webUrl: 'https://next.staging.paubox.net',
+    iamUrl: 'https://api.staging.paubox.net/iam',
+    email: 'jerry@paubox.com',
+    userId: 7,
+    customerId: 25,
+    customerName: 'Paubox',
+    expiresAt: FUTURE,
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+const ENTITLEMENTS = {
+  id: 7,
+  name: 'Jerry',
+  email: 'jerry@paubox.com',
+  customer_id: 25,
+  customer: 'Paubox',
+  roles: ['admin'],
+  mfa_verified: true,
+};
+
+function captureStdout() {
+  const spy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  return {
+    text: () => spy.mock.calls.map((c) => c[0]).join(''),
+    restore: () => spy.mockRestore(),
+  };
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -430,5 +475,281 @@ describe('paubox auth login', () => {
     await expect(
       createProgram().parseAsync(['node', 'paubox', 'auth', 'login']),
     ).rejects.toThrow();
+  });
+
+  it('uses the API key prompt for --api-key', async () => {
+    const { password } = await import('@inquirer/prompts');
+    (password as jest.Mock).mockResolvedValue('sekret');
+    MockPauboxApiClient.prototype.validateCredentials = jest.fn().mockResolvedValue(true);
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    mockCredentials.saveCredentials.mockResolvedValue({ source: 'file' });
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login', '--api-key']);
+
+    expect(mockBrowserLogin).not.toHaveBeenCalled();
+    expect(mockCredentials.saveCredentials).toHaveBeenCalledWith({ apiKey: 'sekret' });
+    out.restore();
+  });
+
+  it('refuses --api-key combined with browser options', async () => {
+    await expect(
+      createProgram().parseAsync(['node', 'paubox', 'auth', 'login', '--api-key', '--web']),
+    ).rejects.toThrow('--api-key cannot be combined');
+  });
+});
+
+describe('paubox auth login --web', () => {
+  beforeEach(() => {
+    mockBrowserLogin.mockResolvedValue({ token: 'session.jwt.token' });
+    MockIamClient.prototype.getEntitlements = jest.fn().mockResolvedValue(ENTITLEMENTS);
+    mockCredentials.saveSession.mockResolvedValue({ source: 'keychain' });
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  it('logs in through the browser and stores the session', async () => {
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login', '--web']);
+
+    expect(mockBrowserLogin).toHaveBeenCalledWith(
+      expect.objectContaining({ webUrl: 'https://next.paubox.com', openBrowser: expect.any(Function) }),
+    );
+    expect(MockIamClient).toHaveBeenCalledWith('https://apx.paubox.com/iam', 'session.jwt.token');
+    expect(mockCredentials.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: 'session.jwt.token',
+        environment: 'production',
+        email: 'jerry@paubox.com',
+        userId: 7,
+        customerId: 25,
+        customerName: 'Paubox',
+      }),
+    );
+    expect(out.text()).toContain('Logged in as jerry@paubox.com (Paubox)');
+    expect(out.text()).toContain('OS keychain');
+    out.restore();
+  });
+
+  it('labels a local dashboard against staging IAM as staging', async () => {
+    const out = captureStdout();
+
+    await createProgram().parseAsync([
+      'node', 'paubox', 'auth', 'login', '--env', 'staging', '--web-url', 'https://local.paubox.net',
+    ]);
+
+    expect(mockBrowserLogin).toHaveBeenCalledWith(expect.objectContaining({ webUrl: 'https://local.paubox.net' }));
+    expect(MockIamClient).toHaveBeenCalledWith('https://api.staging.paubox.net/iam', 'session.jwt.token');
+    expect(mockCredentials.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({ environment: 'staging', webUrl: 'https://local.paubox.net' }),
+    );
+    expect(out.text()).toContain('on staging');
+    out.restore();
+  });
+
+  it('labels an unknown IAM as its dashboard host', async () => {
+    const out = captureStdout();
+
+    await createProgram().parseAsync([
+      'node', 'paubox', 'auth', 'login', '--web-url', 'https://local.paubox.net', '--iam-url', 'http://127.0.0.1:9000',
+    ]);
+
+    expect(mockCredentials.saveSession).toHaveBeenCalledWith(expect.objectContaining({ environment: 'custom' }));
+    expect(out.text()).toContain('on local.paubox.net');
+    out.restore();
+  });
+
+  it('does not launch a browser with --no-browser', async () => {
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'login', '--no-browser']);
+
+    expect(mockBrowserLogin).toHaveBeenCalledWith(expect.objectContaining({ openBrowser: undefined }));
+    out.restore();
+  });
+
+  it('refuses a session that has not completed MFA', async () => {
+    MockIamClient.prototype.getEntitlements = jest.fn().mockResolvedValue({ ...ENTITLEMENTS, mfa_verified: false });
+
+    await expect(
+      createProgram().parseAsync(['node', 'paubox', 'auth', 'login', '--web']),
+    ).rejects.toThrow('MFA');
+    expect(mockCredentials.saveSession).not.toHaveBeenCalled();
+  });
+
+  it('prints the session summary as JSON with --json', async () => {
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'login', '--web', '--env', 'staging']);
+
+    expect(JSON.parse(out.text())).toEqual(
+      expect.objectContaining({
+        status: 'ok',
+        email: 'jerry@paubox.com',
+        customer: 'Paubox',
+        customerId: 25,
+        environment: 'staging',
+        storage: 'OS keychain',
+      }),
+    );
+    out.restore();
+  });
+});
+
+describe('paubox auth status with a browser session', () => {
+  beforeEach(() => {
+    mockCredentials.credentialSource.mockReturnValue('keychain');
+    mockCredentials.maskApiKey.mockImplementation((k: string) => '****' + k.slice(-4));
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  it('reports an active session alongside the API key in JSON', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    mockCredentials.loadCredentials.mockResolvedValue({ apiKey: 'sekret' });
+    MockIamClient.prototype.getEntitlements = jest.fn().mockResolvedValue(ENTITLEMENTS);
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    expect(JSON.parse(out.text())).toEqual({
+      authenticated: true,
+      apiKey: '****kret',
+      formsApiKey: null,
+      storage: 'OS keychain',
+      session: {
+        state: 'active',
+        email: 'jerry@paubox.com',
+        customer: 'Paubox',
+        customerId: 25,
+        environment: 'staging',
+        expiresAt: FUTURE,
+        storage: 'OS keychain',
+      },
+    });
+    out.restore();
+  });
+
+  it('shows a session-only login without claiming the user is unauthenticated', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'file' });
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    MockIamClient.prototype.getEntitlements = jest.fn().mockResolvedValue(ENTITLEMENTS);
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'status']);
+
+    expect(out.text()).toContain('Logged in as jerry@paubox.com (Paubox) on staging');
+    expect(out.text()).toContain('Email API key: not set');
+    expect(out.text()).not.toContain('Not authenticated');
+    out.restore();
+  });
+
+  it('reports an expired session without calling IAM', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session({ expiresAt: PAST }), source: 'keychain' });
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    MockIamClient.prototype.getEntitlements = jest.fn();
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    expect(JSON.parse(out.text()).session.state).toBe('expired');
+    expect(MockIamClient.prototype.getEntitlements).not.toHaveBeenCalled();
+    out.restore();
+  });
+
+  it('reports a session IAM rejects as revoked', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    MockIamClient.prototype.getEntitlements = jest.fn().mockRejectedValue(AuthError.invalid('account'));
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    expect(JSON.parse(out.text()).session.state).toBe('revoked');
+    out.restore();
+  });
+
+  it('reports a session it could not reach IAM to check as unverified', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    mockCredentials.loadCredentials.mockResolvedValue(null);
+    MockIamClient.prototype.getEntitlements = jest.fn().mockRejectedValue(new NetworkError('offline'));
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'status']);
+
+    expect(JSON.parse(out.text()).session.state).toBe('unverified');
+    out.restore();
+  });
+});
+
+describe('paubox auth logout with a browser session', () => {
+  it('revokes the session at IAM and clears both stores', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    MockIamClient.prototype.signOut = jest.fn().mockResolvedValue(undefined);
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'logout']);
+
+    expect(MockIamClient).toHaveBeenCalledWith('https://api.staging.paubox.net/iam', 'session.jwt.token');
+    expect(MockIamClient.prototype.signOut).toHaveBeenCalledTimes(1);
+    expect(mockCredentials.clearCredentials).toHaveBeenCalledTimes(1);
+    expect(mockCredentials.clearSession).toHaveBeenCalledTimes(1);
+    out.restore();
+  });
+
+  it('still clears local state and warns when IAM cannot be reached', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    MockIamClient.prototype.signOut = jest.fn().mockRejectedValue(new NetworkError('offline'));
+    const errSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'logout']);
+
+    expect(mockCredentials.clearSession).toHaveBeenCalledTimes(1);
+    expect(errSpy.mock.calls.map((c) => c[0]).join('')).toContain('Could not revoke');
+    out.restore();
+    errSpy.mockRestore();
+  });
+});
+
+describe('paubox auth token', () => {
+  it('prints the bare session token', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', 'auth', 'token']);
+
+    expect(out.text()).toBe('session.jwt.token\n');
+    out.restore();
+  });
+
+  it('prints the token and where to use it with --json', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session(), source: 'keychain' });
+    const out = captureStdout();
+
+    await createProgram().parseAsync(['node', 'paubox', '--json', 'auth', 'token']);
+
+    expect(JSON.parse(out.text())).toEqual({
+      token: 'session.jwt.token',
+      email: 'jerry@paubox.com',
+      customerId: 25,
+      customer: 'Paubox',
+      environment: 'staging',
+      webUrl: 'https://next.staging.paubox.net',
+      iamUrl: 'https://api.staging.paubox.net/iam',
+      expiresAt: FUTURE,
+    });
+    out.restore();
+  });
+
+  it('fails with an auth error when not logged in', async () => {
+    mockCredentials.loadSession.mockResolvedValue(null);
+
+    await expect(createProgram().parseAsync(['node', 'paubox', 'auth', 'token'])).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('fails with an auth error when the session has expired', async () => {
+    mockCredentials.loadSession.mockResolvedValue({ session: session({ expiresAt: PAST }), source: 'keychain' });
+
+    await expect(createProgram().parseAsync(['node', 'paubox', 'auth', 'token'])).rejects.toThrow('expired');
   });
 });

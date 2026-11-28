@@ -28,6 +28,20 @@ export function printWarning(message: string, opts?: OutputOptions): void {
   process.stderr.write(chalk.yellow('! ') + message + '\n');
 }
 
+/**
+ * Instructions the user needs to finish an interactive step, such as a login URL.
+ * Stderr, so stdout stays parseable under --json, and not silenced by --quiet:
+ * hiding them would leave the user stuck rather than merely less informed.
+ */
+export function printPrompt(message: string): void {
+  process.stderr.write(message + '\n');
+}
+
+/** A bare value for scripts, e.g. `paubox auth token`. Not silenced by --quiet. */
+export function printLine(message: string): void {
+  process.stdout.write(message + '\n');
+}
+
 export interface ErrorDetails {
   suggestion?: string;
   /** One line per failed field, listed under the headline. */

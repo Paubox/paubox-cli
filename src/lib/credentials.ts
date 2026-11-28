@@ -1,8 +1,10 @@
 import * as configStore from './config-store';
-import type { PauboxCredentials } from '../types';
+import type { PauboxCredentials, UserSession } from '../types';
 
 const KEYCHAIN_SERVICE = 'paubox-cli';
 const KEYCHAIN_ACCOUNT = 'default';
+/** A separate entry, so saving or clearing the API keys never touches the login session. */
+const KEYCHAIN_SESSION_ACCOUNT = 'session';
 
 export const ENV_API_KEY = 'PAUBOX_API_KEY';
 export const ENV_FORMS_API_KEY = 'PAUBOX_FORMS_API_KEY';
@@ -205,6 +207,62 @@ export async function clearCredentials(): Promise<void> {
   lastSource = null;
   lastSources = { apiKey: null, formsApiKey: null };
   lastKeychainError = undefined;
+}
+
+/** Stored the same way as the API keys: keychain first, config file when it refuses. */
+export async function saveSession(session: UserSession): Promise<SaveResult> {
+  const keytar = loadKeytar();
+
+  if (keytar) {
+    try {
+      await keytar.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_SESSION_ACCOUNT, JSON.stringify(session));
+      // A file copy from an earlier fallback would otherwise outlive this one.
+      configStore.clearSession();
+      return { source: 'keychain' };
+    } catch (err) {
+      configStore.saveSession(session);
+      return { source: 'file', keychainError: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  configStore.saveSession(session);
+  return { source: 'file' };
+}
+
+export async function loadSession(): Promise<{ session: UserSession; source: SaveResult['source'] } | null> {
+  const keytar = loadKeytar();
+
+  if (keytar) {
+    try {
+      const raw = await keytar.getPassword(KEYCHAIN_SERVICE, KEYCHAIN_SESSION_ACCOUNT);
+      if (raw) {
+        try {
+          return { session: JSON.parse(raw) as UserSession, source: 'keychain' };
+        } catch {
+          // A corrupt entry reads as no session; the next login overwrites it.
+        }
+      }
+    } catch {
+      // Same headless case as readStored(): fall through to the file.
+    }
+  }
+
+  const fromFile = configStore.getSession();
+  return fromFile ? { session: fromFile, source: 'file' } : null;
+}
+
+export async function clearSession(): Promise<void> {
+  const keytar = loadKeytar();
+
+  if (keytar) {
+    try {
+      await keytar.deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_SESSION_ACCOUNT);
+    } catch {
+      // Unreachable keychain: nothing there to delete. The file is cleared below.
+    }
+  }
+
+  configStore.clearSession();
 }
 
 export function maskApiKey(apiKey: string): string {

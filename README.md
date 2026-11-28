@@ -43,8 +43,8 @@ npm install -g paubox-cli
 ## Quick Start
 
 ```bash
-# Authenticate with your Paubox API credentials
-paubox auth login
+# Save your Email API key (or run `paubox auth login` to choose browser login)
+paubox auth login --api-key
 
 # Send an email
 paubox send --to recipient@example.com --from you@yourdomain.com --subject "Hello" --text "Hi there!"
@@ -57,16 +57,35 @@ paubox status <trackingId>
 
 ### `paubox auth`
 
-Manage Paubox API credentials.
+Manage Paubox API credentials and your Paubox login.
 
 ```bash
-paubox auth login          # Prompt for API key; validate and store
+paubox auth login          # Choose: log in with a web browser, or paste an API key
+paubox auth login --web    # Log in with a web browser
+paubox auth login --api-key  # Prompt for an Email API key; validate and store
 paubox auth set-forms-key  # Prompt for a Forms API key (scoped key with the "forms" scope)
-paubox auth logout         # Remove stored credentials (including the Forms API key)
+paubox auth token          # Print the browser login's session token (for tools such as the Paubox MCP server)
+paubox auth logout         # Log out and remove stored credentials (including the Forms API key)
 paubox auth status         # Show current authentication state
 ```
 
 Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Vault, Linux Secret Service) when available. If the keychain is unavailable, they fall back to a local config file (`~/.config/paubox/config.json` on Linux/macOS, `%APPDATA%\paubox\config.json` on Windows).
+
+#### Browser login
+
+`paubox auth login --web` opens the Paubox dashboard in your browser. Log in as usual, including MFA, check that the page shows the same confirmation code as your terminal, and click **Authorize**. The page then tells you to return to the terminal.
+
+The CLI gets its own session, separate from your browser's, so logging out of one does not log you out of the other. It acts as you and expires after 15 days; `paubox auth status` shows when. Sending email still uses an Email API key: browser login is for account tasks that need you rather than a key.
+
+Under the hood the CLI listens on a random `127.0.0.1` port and the dashboard redirects back to it. The session is encrypted to a key that exists only in that CLI process, so the redirect left in your browser history is useless to anyone else.
+
+```bash
+paubox auth login --env staging                 # Log in to staging
+paubox auth login --no-browser                  # Print the URL instead of opening a browser
+paubox auth login --env staging --web-url https://local.paubox.net   # A local paubox-next against staging IAM
+```
+
+`--web-url` and `--iam-url` (or `PAUBOX_WEB_URL` and `PAUBOX_IAM_URL`) override the environment's defaults. The browser must run on the same computer as the CLI.
 
 #### Forms API key
 
@@ -499,6 +518,9 @@ accepted is reported rather than repeated.
 | `PAUBOX_FORMS_API_KEY` | Scoped API key used by `paubox forms` and `paubox webhooks`. Same precedence. |
 | `PAUBOX_FORMS_URL` | Override the Forms API base URL. Defaults to `https://apx.paubox.com/forms`. Must be an `http` or `https` URL. |
 | `PAUBOX_WEBHOOKS_URL` | Override the webhooks API base URL used by `paubox webhooks`. Defaults to `https://api.paubox.com/v1/webhooks`. Must be an `http` or `https` URL. |
+| `PAUBOX_ENV` | Environment for `paubox auth login --web`: `production` (default) or `staging`. `--env` takes precedence. |
+| `PAUBOX_WEB_URL` | Override the dashboard URL browser login opens. `--web-url` takes precedence. |
+| `PAUBOX_IAM_URL` | Override the IAM URL that checks browser login sessions. `--iam-url` takes precedence. |
 | `PAUBOX_TIMEOUT` | Per-request timeout in seconds. Defaults to `30`. `--timeout` takes precedence. |
 | `PAUBOX_DEBUG` | Set to `1` to log each request's method, URL, status, timing and request ID to stderr. Credentials are never logged. |
 
