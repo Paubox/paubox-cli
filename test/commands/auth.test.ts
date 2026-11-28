@@ -531,7 +531,7 @@ describe('paubox auth login --web', () => {
     out.restore();
   });
 
-  it('logs in against a local dashboard and labels the session custom', async () => {
+  it('labels a local dashboard against staging IAM as staging', async () => {
     const out = captureStdout();
 
     await createProgram().parseAsync([
@@ -541,8 +541,20 @@ describe('paubox auth login --web', () => {
     expect(mockBrowserLogin).toHaveBeenCalledWith(expect.objectContaining({ webUrl: 'https://local.paubox.net' }));
     expect(MockIamClient).toHaveBeenCalledWith('https://api.staging.paubox.net/iam', 'session.jwt.token');
     expect(mockCredentials.saveSession).toHaveBeenCalledWith(
-      expect.objectContaining({ environment: 'custom', webUrl: 'https://local.paubox.net' }),
+      expect.objectContaining({ environment: 'staging', webUrl: 'https://local.paubox.net' }),
     );
+    expect(out.text()).toContain('on staging');
+    out.restore();
+  });
+
+  it('labels an unknown IAM as its dashboard host', async () => {
+    const out = captureStdout();
+
+    await createProgram().parseAsync([
+      'node', 'paubox', 'auth', 'login', '--web-url', 'https://local.paubox.net', '--iam-url', 'http://127.0.0.1:9000',
+    ]);
+
+    expect(mockCredentials.saveSession).toHaveBeenCalledWith(expect.objectContaining({ environment: 'custom' }));
     expect(out.text()).toContain('on local.paubox.net');
     out.restore();
   });

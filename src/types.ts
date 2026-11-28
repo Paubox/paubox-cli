@@ -11,7 +11,7 @@ export interface PauboxCredentials {
  */
 export interface UserSession {
   token: string;
-  /** `production`, `staging`, or `custom` when either URL was overridden. */
+  /** `production`, `staging`, or `custom` when the IAM URL matches neither. */
   environment: string;
   webUrl: string;
   iamUrl: string;

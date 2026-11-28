@@ -3,7 +3,7 @@ import { ConfigError } from './errors';
 export type EnvironmentName = 'production' | 'staging';
 
 export interface Environment {
-  /** `production`, `staging`, or `custom` when either URL was overridden. */
+  /** `production`, `staging`, or `custom` when the IAM URL matches neither. */
   name: string;
   /** The Paubox dashboard (paubox-next), where the browser login happens. */
   webUrl: string;
@@ -47,8 +47,9 @@ function normalizeUrl(raw: string, label: string): string {
 
 /**
  * Flags win over environment variables, which win over the named environment's
- * defaults. Overriding either URL makes the environment `custom`, so a session
- * minted against a local dashboard is never labelled as production.
+ * defaults. The name follows the IAM URL, because IAM decides whose data the
+ * session acts on: a local dashboard against staging IAM is still `staging`, and
+ * an IAM URL matching no known environment is `custom`.
  */
 export function resolveEnvironment(
   opts: EnvironmentOptions = {},
@@ -65,10 +66,12 @@ export function resolveEnvironment(
 
   const webOverride = opts.webUrl ?? env[ENV_WEB_URL];
   const iamOverride = opts.iamUrl ?? env[ENV_IAM_URL];
+  const iamUrl = iamOverride ? normalizeUrl(iamOverride, '--iam-url') : base.iamUrl;
+  const named = (Object.keys(ENVIRONMENTS) as EnvironmentName[]).find((key) => ENVIRONMENTS[key].iamUrl === iamUrl);
 
   return {
-    name: webOverride || iamOverride ? 'custom' : requested,
+    name: named ?? 'custom',
     webUrl: webOverride ? normalizeUrl(webOverride, '--web-url') : base.webUrl,
-    iamUrl: iamOverride ? normalizeUrl(iamOverride, '--iam-url') : base.iamUrl,
+    iamUrl,
   };
 }

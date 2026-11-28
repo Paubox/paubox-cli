@@ -15,13 +15,17 @@ describe('resolveEnvironment', () => {
     expect(resolveEnvironment({ env: 'production' }, { PAUBOX_ENV: 'staging' }).name).toBe('production');
   });
 
-  it('marks an overridden URL as custom and keeps the other default', () => {
+  it('keeps the environment name for a local dashboard against its IAM', () => {
     const resolved = resolveEnvironment({ env: 'staging', webUrl: 'https://local.paubox.net/' }, {});
     expect(resolved).toEqual({
-      name: 'custom',
+      name: 'staging',
       webUrl: 'https://local.paubox.net',
       iamUrl: ENVIRONMENTS.staging.iamUrl,
     });
+  });
+
+  it('names the environment after an overridden IAM URL that matches one', () => {
+    expect(resolveEnvironment({ iamUrl: `${ENVIRONMENTS.staging.iamUrl}/` }, {}).name).toBe('staging');
   });
 
   it('reads URL overrides from the environment', () => {
